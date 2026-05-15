@@ -8,17 +8,17 @@ import { ok } from '../shared/types/api'
 const router = Router()
 
 // Extrai número limpo de "5511999999999@s.whatsapp.net"
-function extractPhone(remoteJid: string): string {
+export function extractPhone(remoteJid: string): string {
   return remoteJid.split('@')[0]
 }
 
 // Retorna true se for mensagem de grupo
-function isGroup(remoteJid: string): boolean {
+export function isGroup(remoteJid: string): boolean {
   return remoteJid.endsWith('@g.us')
 }
 
 // Extrai texto da mensagem independente do tipo
-function extractText(message: Record<string, unknown>): string {
+export function extractText(message: Record<string, unknown>): string {
   if (!message) return ''
   // Texto simples
   if (typeof message.conversation === 'string') return message.conversation
@@ -43,15 +43,15 @@ function extractText(message: Record<string, unknown>): string {
   return ''
 }
 
-function isConfirm(text: string): boolean {
+export function isConfirm(text: string): boolean {
   return /^(sim|1|btn_confirm|confirmar|confirm)/i.test(text)
 }
 
-function isCancel(text: string): boolean {
+export function isCancel(text: string): boolean {
   return /^(n[aã]o|nao|2|btn_cancel|cancelar|cancel)/i.test(text)
 }
 
-function isReschedule(text: string): boolean {
+export function isReschedule(text: string): boolean {
   return /^(3|btn_reschedule|reagendar|reschedule)/i.test(text)
 }
 

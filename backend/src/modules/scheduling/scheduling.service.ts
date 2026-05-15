@@ -83,7 +83,7 @@ export async function cancelAppointment(tenantId: string, id: string) {
     data: { status: 'cancelled', cancelledAt: new Date() },
   })
 
-  notifyNextInWaitlist(tenantId, existing.scheduledAt).catch(() => null)
+  notifyNextInWaitlist(tenantId, existing.scheduledAt, existing.professionalId).catch(() => null)
   audit({ tenantId, action: 'cancel', entity: 'appointment', entityId: id })
 
   return cancelled

@@ -23,4 +23,9 @@
   "password": "123456"
 
 
+  # para rodar testes
+
+  Para rodar: npm test ou npm run test:watch durante o desenvolvimento.
+
+
 para começar a usar

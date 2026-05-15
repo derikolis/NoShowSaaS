@@ -17,7 +17,8 @@
       "Bash(docker exec noshow_evolution *)",
       "Bash(docker pull *)",
       "Bash(docker-compose up *)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(npx jest *)"
     ]
   }
 }
