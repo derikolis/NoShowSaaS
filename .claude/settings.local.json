@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm init *)",
+      "Bash(npm install *)",
+      "Bash(cp .env.example .env)",
+      "Bash(npx prisma *)",
+      "Bash(dir /s /b /a-d)",
+      "Bash(findstr /v \"node_modules\")",
+      "Bash(findstr /v \".git\")",
+      "Bash(findstr /v \"dist\")",
+      "Bash(docker compose *)",
+      "Bash(docker exec noshow_redis *)",
+      "Bash(npm run *)",
+      "PowerShell(docker pull *)",
+      "PowerShell(docker exec noshow_evolution *)",
+      "Bash(docker exec noshow_evolution *)",
+      "Bash(docker pull *)",
+      "Bash(docker-compose up *)"
+    ]
+  }
+}

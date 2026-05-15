@@ -1,0 +1,112 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Tenant {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  plan      String   @default("basic")
+  createdAt DateTime @default(now())
+
+  // Configurações WhatsApp por tenant (sobrescrevem as variáveis de ambiente)
+  whatsappPhone     String? // número que os clientes verão como remetente
+  evolutionApiUrl   String?
+  evolutionApiKey   String?
+  evolutionInstance String?
+
+  users        User[]
+  clients      Client[]
+  appointments Appointment[]
+  waitlist     Waitlist[]
+}
+
+model User {
+  id           String   @id @default(uuid())
+  tenantId     String
+  name         String
+  email        String
+  passwordHash String
+  role         String   // owner | receptionist | employee
+  createdAt    DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, email])
+}
+
+model Client {
+  id           String    @id @default(uuid())
+  tenantId     String
+  name         String
+  phone        String
+  email        String?
+  riskScore    Int       @default(0)
+  isVip        Boolean   @default(false)
+  consentedAt  DateTime?
+  createdAt    DateTime  @default(now())
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  appointments Appointment[]
+  waitlist     Waitlist[]
+}
+
+model Appointment {
+  id             String    @id @default(uuid())
+  tenantId       String
+  clientId       String
+  professionalId String
+  service        String
+  scheduledAt    DateTime
+  status         String    @default("scheduled") // scheduled | confirmed | cancelled | no_show
+  riskScore      Int       @default(0)
+  confirmedAt    DateTime?
+  cancelledAt    DateTime?
+  createdAt      DateTime  @default(now())
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  client        Client         @relation(fields: [clientId], references: [id])
+  notifications Notification[]
+}
+
+model Waitlist {
+  id         String    @id @default(uuid())
+  tenantId   String
+  slot       DateTime
+  clientId   String
+  position   Int
+  notifiedAt DateTime?
+  acceptedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  client Client @relation(fields: [clientId], references: [id])
+}
+
+model Notification {
+  id            String    @id @default(uuid())
+  tenantId      String
+  appointmentId String
+  type          String    // reminder_24h | reminder_2h | confirmation | waitlist
+  channel       String    @default("whatsapp") // whatsapp | email
+  status        String    @default("pending")  // pending | sent | failed
+  sentAt        DateTime?
+  createdAt     DateTime  @default(now())
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  tenantId  String
+  userId    String?
+  action    String
+  entity    String
+  entityId  String
+  ip        String?
+  createdAt DateTime @default(now())
+}

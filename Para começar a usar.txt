@@ -1,0 +1,19 @@
+  Para começar a usar
+
+  # 1. Subir banco e redis
+  docker compose up -d
+
+  # 2. Copiar env e ajustar se precisar
+  cp backend/.env.example backend/.env
+
+  # 3. Rodar migration
+  cd backend && npm run db:migrate
+
+  # 4. Backend
+  npm run dev
+
+  # 5. Frontend (outro terminal)
+  cd frontend && npm run dev
+
+
+para começar a usar
