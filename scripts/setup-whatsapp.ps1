@@ -23,7 +23,7 @@ do {
     Start-Sleep -Seconds 2
     $tries++
     try {
-        $r = Invoke-RestMethod -Uri "$API_URL/" -Method Get -ErrorAction Stop
+        $null = Invoke-RestMethod -Uri "$API_URL/" -Method Get -ErrorAction Stop
         break
     } catch {
         if ($tries -ge 15) {
@@ -39,7 +39,7 @@ Write-Host ""
 Write-Host "Criando instancia '$INSTANCE'..." -ForegroundColor Yellow
 $body = @{ instanceName = $INSTANCE; qrcode = $true; integration = "WHATSAPP-BAILEYS" } | ConvertTo-Json
 try {
-    $resp = Invoke-RestMethod -Uri "$API_URL/instance/create" -Method Post -Headers $headers -Body $body
+    $null = Invoke-RestMethod -Uri "$API_URL/instance/create" -Method Post -Headers $headers -Body $body
     Write-Host "Instancia criada." -ForegroundColor Green
 } catch {
     $msg = $_.ErrorDetails.Message | ConvertFrom-Json -ErrorAction SilentlyContinue
@@ -73,7 +73,7 @@ try {
 Write-Host ""
 Write-Host "Obtendo QR code..." -ForegroundColor Yellow
 try {
-    $qr = Invoke-RestMethod -Uri "$API_URL/instance/connect/$INSTANCE" -Method Get -Headers $headers
+    $null = Invoke-RestMethod -Uri "$API_URL/instance/connect/$INSTANCE" -Method Get -Headers $headers
     Write-Host ""
     Write-Host "ESCANEIE O QR CODE COM O WHATSAPP:" -ForegroundColor Cyan
     Write-Host "Acesse no navegador:" -ForegroundColor White
