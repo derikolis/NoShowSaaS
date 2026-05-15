@@ -17,12 +17,16 @@ const createSchema = z.object({
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const status = req.query.status as string | undefined
+    const dateFrom = req.query.dateFrom ? new Date(req.query.dateFrom as string) : undefined
+    const dateTo = req.query.dateTo ? new Date(req.query.dateTo as string) : undefined
+    const page = req.query.page ? parseInt(req.query.page as string, 10) : 1
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20
     // Funcionário vê apenas sua própria agenda
     const professionalId = req.user.role === 'employee'
       ? req.user.sub
       : req.query.professionalId as string | undefined
-    const appointments = await listAppointments(req.tenantId, { status, professionalId })
-    res.json(ok(appointments))
+    const result = await listAppointments(req.tenantId, { status, professionalId, dateFrom, dateTo, page, limit })
+    res.json(ok(result))
   } catch (err) { next(err) }
 })
 

@@ -4,12 +4,40 @@ import { scheduleReminders, scheduleRiskBasedReminders } from '../notifications/
 import { notifyNextInWaitlist } from '../waitlist/waitlist.service'
 import { audit } from '../../shared/utils/audit'
 
-export async function listAppointments(tenantId: string, filters?: { status?: string; professionalId?: string }) {
-  return prisma.appointment.findMany({
-    where: { tenantId, ...filters },
-    include: { client: true },
-    orderBy: { scheduledAt: 'asc' },
-  })
+export async function listAppointments(tenantId: string, filters?: {
+  status?: string
+  professionalId?: string
+  dateFrom?: Date
+  dateTo?: Date
+  page?: number
+  limit?: number
+}) {
+  const { status, professionalId, dateFrom, dateTo, page = 1, limit = 20 } = filters ?? {}
+
+  const where = {
+    tenantId,
+    ...(status ? { status } : {}),
+    ...(professionalId ? { professionalId } : {}),
+    ...((dateFrom || dateTo) ? {
+      scheduledAt: {
+        ...(dateFrom ? { gte: dateFrom } : {}),
+        ...(dateTo ? { lte: dateTo } : {}),
+      },
+    } : {}),
+  }
+
+  const [total, appointments] = await Promise.all([
+    prisma.appointment.count({ where }),
+    prisma.appointment.findMany({
+      where,
+      include: { client: true },
+      orderBy: { scheduledAt: 'asc' },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+  ])
+
+  return { appointments, total, page, limit, totalPages: Math.ceil(total / limit) }
 }
 
 export async function getAppointment(tenantId: string, id: string) {

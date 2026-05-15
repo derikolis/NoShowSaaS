@@ -5,7 +5,7 @@ const links = [
   { to: '/', label: 'Dashboard', icon: '▦' },
   { to: '/appointments', label: 'Agendamentos', icon: '📅' },
   { to: '/clients', label: 'Clientes', icon: '👥' },
-  { to: '/professionals', label: 'Profissionais', icon: '🩺' },
+  { to: '/professionals', label: 'Equipe', icon: '🩺' },
   { to: '/settings', label: 'Configurações', icon: '⚙️' },
 ]
 

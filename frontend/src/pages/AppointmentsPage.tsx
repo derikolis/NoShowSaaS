@@ -35,14 +35,25 @@ function RiskBadge({ score }: { score: number }) {
   return <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-700">Alto</span>
 }
 
+function todayISO() {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  return d.toISOString().slice(0, 10)
+}
+
 export default function AppointmentsPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([])
+  const [total, setTotal] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
+  const [page, setPage] = useState(1)
   const [clients, setClients] = useState<Client[]>([])
   const [professionals, setProfessionals] = useState<Professional[]>([])
   const [showForm, setShowForm] = useState(false)
   const [rescheduleId, setRescheduleId] = useState<string | null>(null)
   const [newScheduledAt, setNewScheduledAt] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
+  const [dateFrom, setDateFrom] = useState(todayISO())
+  const [dateTo, setDateTo] = useState('')
   const [toast, setToast] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -56,12 +67,25 @@ export default function AppointmentsPage() {
   const [waitlistClientId, setWaitlistClientId] = useState('')
   const [addingToWaitlist, setAddingToWaitlist] = useState(false)
 
-  function load() {
-    api.get('/appointments').then(({ data }) => setAppointments(data.data))
+  function load(currentPage = page) {
+    const params: Record<string, string | number> = { page: currentPage, limit: 20 }
+    if (filterStatus !== 'all') params.status = filterStatus
+    if (dateFrom) params.dateFrom = new Date(dateFrom).toISOString()
+    if (dateTo) params.dateTo = new Date(dateTo + 'T23:59:59').toISOString()
+    api.get('/appointments', { params }).then(({ data }) => {
+      setAppointments(data.data.appointments)
+      setTotal(data.data.total)
+      setTotalPages(data.data.totalPages)
+    })
   }
 
   useEffect(() => {
-    load()
+    setPage(1)
+    load(1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterStatus, dateFrom, dateTo])
+
+  useEffect(() => {
     api.get('/clients').then(({ data }) => setClients(data.data))
     api.get('/professionals').then(({ data }) => setProfessionals(data.data))
   }, [])
@@ -79,7 +103,7 @@ export default function AppointmentsPage() {
       await api.post('/appointments', { clientId, service, scheduledAt: iso, professionalId })
       setClientId(''); setService(''); setScheduledAt('')
       setShowForm(false)
-      load()
+      load(page)
       showToast('Agendamento criado com sucesso')
     } catch {
       showToast('Erro ao criar agendamento')
@@ -93,7 +117,7 @@ export default function AppointmentsPage() {
     if (!rescheduleId) return
     try {
       await api.patch(`/appointments/${rescheduleId}/reschedule`, { scheduledAt: new Date(newScheduledAt).toISOString() })
-      load()
+      load(page)
       setRescheduleId(null)
       setNewScheduledAt('')
       showToast('Agendamento reagendado')
@@ -130,17 +154,13 @@ export default function AppointmentsPage() {
   async function action(id: string, type: 'confirm' | 'cancel' | 'no-show') {
     try {
       await api.patch(`/appointments/${id}/${type}`)
-      load()
+      load(page)
       const labels = { confirm: 'confirmado', cancel: 'cancelado', 'no-show': 'marcado como no-show' }
       showToast(`Agendamento ${labels[type]}`)
     } catch {
       showToast('Erro ao atualizar agendamento')
     }
   }
-
-  const filtered = filterStatus === 'all'
-    ? appointments
-    : appointments.filter(a => a.status === filterStatus)
 
   const tabs = [
     { key: 'all', label: 'Todos' },
@@ -235,7 +255,34 @@ export default function AppointmentsPage() {
         )}
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-          <div className="flex gap-1 px-4 pt-4 border-b border-gray-100">
+          <div className="flex flex-wrap items-center gap-3 px-4 pt-4 pb-3 border-b border-gray-100">
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <label className="font-medium">De</label>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={e => setDateFrom(e.target.value)}
+                className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <label className="font-medium">Até</label>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={e => setDateTo(e.target.value)}
+                className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              {(dateFrom || dateTo) && (
+                <button
+                  onClick={() => { setDateFrom(''); setDateTo('') }}
+                  className="text-xs text-gray-400 hover:text-gray-600 underline"
+                >
+                  Limpar datas
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex gap-1 px-4 pt-2 border-b border-gray-100">
             {tabs.map(({ key, label }) => (
               <button
                 key={key}
@@ -263,14 +310,14 @@ export default function AppointmentsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filtered.length === 0 && (
+              {appointments.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-6 py-8 text-center text-gray-400">
                     Nenhum agendamento encontrado
                   </td>
                 </tr>
               )}
-              {filtered.map(a => (
+              {appointments.map(a => (
                 <tr key={a.id} className="hover:bg-gray-50">
                   <td className="px-6 py-3 font-medium text-gray-900">{a.client.name}</td>
                   <td className="px-6 py-3 text-gray-600">{a.service}</td>
@@ -327,6 +374,28 @@ export default function AppointmentsPage() {
               ))}
             </tbody>
           </table>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100 text-sm text-gray-500">
+              <span>{total} agendamento{total !== 1 ? 's' : ''} • página {page} de {totalPages}</span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { const p = page - 1; setPage(p); load(p) }}
+                  disabled={page === 1}
+                  className="px-3 py-1 border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-50 transition-colors"
+                >
+                  ← Anterior
+                </button>
+                <button
+                  onClick={() => { const p = page + 1; setPage(p); load(p) }}
+                  disabled={page === totalPages}
+                  className="px-3 py-1 border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-50 transition-colors"
+                >
+                  Próxima →
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
