@@ -10,6 +10,7 @@ router.use(authMiddleware)
 const addSchema = z.object({
   clientId: z.string().uuid(),
   slot: z.string().datetime(),
+  professionalId: z.string().uuid().optional(),
 })
 
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
@@ -24,7 +25,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 router.post('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = addSchema.parse(req.body)
-    const entry = await addToWaitlist(req.tenantId, body.clientId, new Date(body.slot))
+    const entry = await addToWaitlist(req.tenantId, body.clientId, new Date(body.slot), body.professionalId)
     res.status(201).json(ok(entry, 'Adicionado à lista de espera'))
   } catch (err) { next(err) }
 })

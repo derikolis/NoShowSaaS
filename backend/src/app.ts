@@ -1,4 +1,5 @@
 import express from 'express'
+import cors from 'cors'
 import 'dotenv/config'
 import dashboardRoutes from './modules/dashboard/dashboard.routes'
 import authRoutes from './modules/auth/auth.routes'
@@ -11,6 +12,12 @@ import whatsappWebhook from './webhooks/whatsapp.webhook'
 import { errorMiddleware } from './shared/middlewares/error.middleware'
 
 const app = express()
+
+app.use(cors({
+  origin: process.env.FRONTEND_URL ?? 'http://localhost:3000',
+  credentials: true,
+}))
+
 app.use(express.json())
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }))

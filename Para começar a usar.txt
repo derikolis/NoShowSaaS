@@ -16,4 +16,11 @@
   cd frontend && npm run dev
 
 
+  "tenantName": "Clínica Teste",
+  "tenantSlug": "clinica-teste",
+  "ownerName": "Derik",
+  "email": "derik@teste.com",
+  "password": "123456"
+
+
 para começar a usar

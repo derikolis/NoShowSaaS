@@ -1,18 +1,18 @@
 import prisma from '../../shared/utils/prisma'
 import { sendWhatsApp } from '../notifications/notification.service'
 
-export async function addToWaitlist(tenantId: string, clientId: string, slot: Date) {
+export async function addToWaitlist(tenantId: string, clientId: string, slot: Date, professionalId?: string) {
   const lastPosition = await prisma.waitlist.findFirst({
     where: { tenantId, slot },
     orderBy: { position: 'desc' },
   })
 
   return prisma.waitlist.create({
-    data: { tenantId, clientId, slot, position: (lastPosition?.position ?? 0) + 1 },
+    data: { tenantId, clientId, slot, professionalId, position: (lastPosition?.position ?? 0) + 1 },
   })
 }
 
-export async function notifyNextInWaitlist(tenantId: string, slot: Date) {
+export async function notifyNextInWaitlist(tenantId: string, slot: Date, professionalId?: string) {
   const next = await prisma.waitlist.findFirst({
     where: { tenantId, slot, notifiedAt: null },
     orderBy: { position: 'asc' },
@@ -21,7 +21,10 @@ export async function notifyNextInWaitlist(tenantId: string, slot: Date) {
 
   if (!next) return null
 
-  await prisma.waitlist.update({ where: { id: next.id }, data: { notifiedAt: new Date() } })
+  await prisma.waitlist.update({
+    where: { id: next.id },
+    data: { notifiedAt: new Date(), ...(professionalId ? { professionalId } : {}) },
+  })
 
   const hora = slot.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   const message = `Olá ${next.client.name}! Uma vaga abriu para o horário das ${hora}. Responda SIM para confirmar sua presença.`

@@ -74,14 +74,15 @@ model Appointment {
 }
 
 model Waitlist {
-  id         String    @id @default(uuid())
-  tenantId   String
-  slot       DateTime
-  clientId   String
-  position   Int
-  notifiedAt DateTime?
-  acceptedAt DateTime?
-  createdAt  DateTime  @default(now())
+  id             String    @id @default(uuid())
+  tenantId       String
+  slot           DateTime
+  clientId       String
+  professionalId String?
+  position       Int
+  notifiedAt     DateTime?
+  acceptedAt     DateTime?
+  createdAt      DateTime  @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
   client Client @relation(fields: [clientId], references: [id])

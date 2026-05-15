@@ -108,7 +108,7 @@ router.post('/whatsapp', async (req: Request, res: Response) => {
         data: {
           tenantId: waitlistEntry.tenantId,
           clientId: client.id,
-          professionalId: client.id, // placeholder — ajustar quando profissional for vinculado à vaga
+          professionalId: waitlistEntry.professionalId ?? waitlistEntry.clientId,
           service: 'Reservado via lista de espera',
           scheduledAt: waitlistEntry.slot,
           status: 'confirmed',
@@ -144,7 +144,7 @@ router.post('/whatsapp', async (req: Request, res: Response) => {
       where: { id: appointment.id },
       data: { status: 'cancelled', cancelledAt: new Date() },
     })
-    notifyNextInWaitlist(appointment.tenantId, appointment.scheduledAt).catch(() => null)
+    notifyNextInWaitlist(appointment.tenantId, appointment.scheduledAt, appointment.professionalId).catch(() => null)
     recalculateClientScore(appointment.tenantId, client.id).catch(() => null)
     await sendWhatsApp(client.phone, '❌ Agendamento cancelado. Caso queira remarcar, entre em contato.')
 
@@ -153,7 +153,7 @@ router.post('/whatsapp', async (req: Request, res: Response) => {
       where: { id: appointment.id },
       data: { status: 'cancelled', cancelledAt: new Date() },
     })
-    notifyNextInWaitlist(appointment.tenantId, appointment.scheduledAt).catch(() => null)
+    notifyNextInWaitlist(appointment.tenantId, appointment.scheduledAt, appointment.professionalId).catch(() => null)
     recalculateClientScore(appointment.tenantId, client.id).catch(() => null)
     await sendWhatsApp(client.phone, '🔄 Agendamento cancelado para reagendamento. Entre em contato ou acesse nossa plataforma para escolher um novo horário.')
   }
