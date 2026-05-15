@@ -1,12 +1,13 @@
 import { NavLink, useNavigate } from 'react-router-dom'
+import { LayoutDashboard, CalendarDays, Users, UsersRound, Settings, LogOut } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 
 const links = [
-  { to: '/', label: 'Dashboard', icon: '▦' },
-  { to: '/appointments', label: 'Agendamentos', icon: '📅' },
-  { to: '/clients', label: 'Clientes', icon: '👥' },
-  { to: '/professionals', label: 'Equipe', icon: '🩺' },
-  { to: '/settings', label: 'Configurações', icon: '⚙️' },
+  { to: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/appointments', label: 'Agendamentos', icon: CalendarDays },
+  { to: '/clients', label: 'Clientes', icon: Users },
+  { to: '/professionals', label: 'Equipe', icon: UsersRound },
+  { to: '/settings', label: 'Configurações', icon: Settings },
 ]
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -26,7 +27,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <p className="text-lg font-bold leading-tight">Protection</p>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">
-          {links.map(({ to, label, icon }) => (
+          {links.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
@@ -39,7 +40,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 }`
               }
             >
-              <span>{icon}</span>
+              <Icon size={18} />
               {label}
             </NavLink>
           ))}
@@ -49,7 +50,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             onClick={handleLogout}
             className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-indigo-200 hover:bg-indigo-800 hover:text-white transition-colors"
           >
-            <span>↩</span>
+            <LogOut size={18} />
             Sair
           </button>
         </div>
