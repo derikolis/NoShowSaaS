@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import LoginPage from './pages/LoginPage'
+import RegisterPage from './pages/RegisterPage'
 import DashboardPage from './pages/DashboardPage'
 import AppointmentsPage from './pages/AppointmentsPage'
 import ClientsPage from './pages/ClientsPage'
@@ -13,6 +14,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
       <Route path="/" element={token ? <DashboardPage /> : <Navigate to="/login" />} />
       <Route path="/appointments" element={token ? <AppointmentsPage /> : <Navigate to="/login" />} />
       <Route path="/clients" element={token ? <ClientsPage /> : <Navigate to="/login" />} />

@@ -1,370 +1,246 @@
 # CLAUDE.md — No-Show Protection SaaS
-> Guia de desenvolvimento para o Claude Code consultar em toda sessão.
+> Estado atual do projeto em 15/05/2026. Consultar no início de cada sessão.
 
 ---
 
-## CONTEXTO DO PROJETO
+## STATUS DO MVP
 
-SaaS B2B para reduzir no-show em agendamentos.
+**Backend: COMPLETO** — todas as 10 etapas implementadas e funcionando.
+**Frontend: COMPLETO** — todas as páginas construídas.
+**Integração WhatsApp: parcial** — Evolution API configurada para dev; webhook recebendo.
 
-**Problema:** cliente agenda, não aparece, empresa perde dinheiro e o horário fica vazio.
-
-**Solução:** sistema de lembretes automáticos via WhatsApp com motor de risco baseado em regras, lista de espera automática e confirmação obrigatória.
-
-**Status atual:** MVP em construção. Sem clientes reais ainda. Hipótese a ser validada.
-
-**Time:** 1 desenvolvedor (Derik).
+O produto está tecnicamente pronto para teste com usuário real.
+O próximo passo é validação, não mais código de backend.
 
 ---
 
-## REGRA PRINCIPAL DE DESENVOLVIMENTO
+## O QUE JÁ ESTÁ IMPLEMENTADO
 
-> Sempre construir o mínimo que funciona antes de adicionar complexidade.
+### Backend (`/backend/src`)
 
-Se uma solução simples resolve, use a simples. Não adicione camadas antes de precisar delas.
+| Módulo | Arquivo | Status |
+|---|---|---|
+| Auth (JWT + multi-tenant) | `modules/auth/` | ✅ Completo |
+| Clientes (CRUD + LGPD) | `modules/clients/` | ✅ Completo |
+| Profissionais | `modules/professionals/` | ✅ Completo |
+| Agendamentos | `modules/scheduling/` | ✅ Completo |
+| Motor de risco (score) | `modules/risk-engine/` | ✅ Completo |
+| Notificações WhatsApp | `modules/notifications/` | ✅ Completo |
+| Lista de espera | `modules/waitlist/` | ✅ Completo |
+| Dashboard (métricas) | `modules/dashboard/` | ✅ Completo |
+| Configurações + QR | `modules/settings/` | ✅ Completo |
+| Webhook WhatsApp | `webhooks/whatsapp.webhook.ts` | ✅ Completo |
+| Jobs BullMQ (lembretes) | `jobs/` | ✅ Completo |
+| Auditoria | `shared/utils/audit.ts` | ✅ Completo |
+
+### Frontend (`/frontend/src`)
+
+| Página | Arquivo | Status |
+|---|---|---|
+| Login | `pages/LoginPage.tsx` | ✅ Completo |
+| Dashboard | `pages/DashboardPage.tsx` | ✅ Completo |
+| Agendamentos | `pages/AppointmentsPage.tsx` | ✅ Completo |
+| Clientes | `pages/ClientsPage.tsx` | ✅ Completo |
+| Profissionais | `pages/ProfessionalsPage.tsx` | ✅ Completo |
+| Configurações / WhatsApp | `pages/SettingsPage.tsx` | ✅ Completo |
+
+### Banco de dados
+
+Migrations aplicadas:
+- Schema base (Tenant, User, Client, Appointment, Waitlist, Notification, AuditLog)
+- LGPD: campo `consentedAt` no Client
+- WhatsApp: campos Evolution API por tenant
 
 ---
 
-## STACK DEFINIDA
+## STACK
 
-| Camada | Tecnologia |
-|---|---|
-| Backend | Node.js + TypeScript |
-| Frontend | React + Vite |
-| Banco | PostgreSQL |
-| ORM | Prisma |
-| Jobs | BullMQ |
-| Cache | Redis (necessário para BullMQ) |
-| Containers | Docker |
-| WhatsApp | Evolution API (desenvolvimento) → API oficial Meta (produção) |
-
-**O que NÃO usar no MVP:**
-- Microserviços (usar monolito modular)
-- Next.js (desnecessário para painel B2B)
-- Machine Learning / IA (zero por enquanto)
-- Frameworks pesados desnecessários
+| Camada | Tecnologia | Versão |
+|---|---|---|
+| Backend | Node.js + TypeScript | TS 6, Express 5 |
+| Frontend | React + Vite | React 19, Vite 8 |
+| Banco | PostgreSQL | 16 |
+| ORM | Prisma + adapter pg | 7.8 |
+| Jobs | BullMQ | 5 |
+| Cache | Redis (ioredis) | 7 |
+| Containers | Docker Compose | — |
+| WhatsApp DEV | Evolution API v1.8.2 | self-hosted |
+| WhatsApp PROD | API oficial Meta | ⚠️ pendente |
 
 ---
 
-## ARQUITETURA DO MVP
+## ARQUITETURA
 
-### Estrutura: Monolito Modular
-
-Organizar o código em módulos dentro de um único projeto. Cada módulo pode virar um serviço separado no futuro sem reescrever tudo.
+Monolito modular. Cada módulo em `/backend/src/modules/<nome>/`.
 
 ```
-/
-  /backend
-    /src
-      /modules
-        /scheduling      → agendamentos
-        /clients         → cadastro de clientes
-        /risk-engine     → cálculo de score
-        /notifications   → envio de lembretes
-        /waitlist        → lista de espera
-        /auth            → autenticação multi-tenant
-      /shared
-        /middlewares
-        /utils
-        /types
-      /jobs              → BullMQ workers
-      /webhooks          → receber respostas do WhatsApp
-    /prisma
-      schema.prisma
-  /frontend
-    /src
-      /pages
-      /components
-      /hooks
-      /services
+backend/src/
+  modules/
+    auth/           → register, login
+    clients/        → CRUD, LGPD delete
+    professionals/  → CRUD (só owner cria)
+    scheduling/     → create, cancel, confirm, reschedule, no-show
+    risk-engine/    → calculateScore, recalculateClientScore
+    notifications/  → scheduleRiskBasedReminders, sendWhatsApp
+    waitlist/       → addToWaitlist, notifyNextInWaitlist
+    dashboard/      → getDashboardStats
+    settings/       → status WA, QR, test, evolutionInstance por tenant
+  webhooks/
+    whatsapp.webhook.ts  → recebe eventos Evolution API
+  jobs/
+    queues.ts            → notificationQueue, riskRecalcQueue
+    scheduler.ts         → jobs recorrentes (cron)
+    notification.worker.ts → processa todos os tipos de job
+  shared/
+    middlewares/     → authMiddleware, requireRole, errorMiddleware
+    types/           → ApiResponse, JwtPayload, express.d.ts
+    utils/           → prisma.ts (PrismaPg), audit.ts
 ```
-
----
-
-## MVP — O QUE CONSTRUIR
-
-Escopo fechado. Nada além disso até validar com usuário real.
-
-### Funcionalidades obrigatórias no MVP
-
-1. **Agendamento**
-   - Criar, cancelar, reagendar
-   - Dados: nome, telefone, serviço, data, hora, profissional
-
-2. **Motor de risco (sem IA)**
-   - Calcular score baseado em regras
-   - Classificar: baixo / médio / alto risco
-
-3. **Lembretes via WhatsApp**
-   - 24h antes do agendamento
-   - 2h antes do agendamento
-   - Botões: confirmar / cancelar / reagendar
-
-4. **Confirmação e cancelamento**
-   - Cliente responde no WhatsApp
-   - Sistema atualiza status automaticamente via webhook
-
-5. **Lista de espera**
-   - Quando vaga cancela, notifica próximo da fila
-   - Primeiro a aceitar recebe a vaga
-
-6. **Dashboard básico**
-   - Taxa de comparecimento
-   - Horários recuperados
-   - Clientes com mais faltas
-
-### Fora do MVP (não construir agora)
-- PIX e pagamento antecipado
-- Analytics avançado
-- App mobile
-- White-label
-- API pública
-- Integrações (Google Calendar, CRM, ERP)
-- Machine learning
 
 ---
 
 ## MOTOR DE RISCO
 
-Sistema de score baseado em regras. Sem IA, sem custo por uso.
-
-### Regras de pontuação
+Sistema de score por regras — sem IA.
 
 | Evento | Pontos |
 |---|---|
-| Cliente novo (sem histórico) | +15 |
-| Faltou 1x no passado | +20 |
+| Cliente novo | +15 |
+| Faltou 1x | +20 |
 | Faltou 2x ou mais | +40 |
-| Horário de pico (12h–14h, 18h–20h) | +20 |
+| Horário de pico (12–14h, 18–20h) | +20 |
+| Agendamento última hora (< 2h) | +25 |
 | Confirmou presença | -30 |
-| Agendamento de última hora (< 2h) | +25 |
-| Cliente VIP / histórico positivo | -20 |
+| Cliente VIP | -20 |
 
-### Classificação
-
-| Score | Risco | Ação |
+| Score | Nível | Ação |
 |---|---|---|
-| 0–30 | Baixo | Lembrete simples |
-| 31–60 | Médio | Confirmação obrigatória |
-| 61–100 | Alto | Confirmação dupla + possível bloqueio |
+| 0–30 | Baixo | Lembrete padrão (24h + 2h) |
+| 31–60 | Médio | + confirmação 4h antes |
+| 61–100 | Alto | + confirmação 6h antes + bloqueia horário de pico |
 
-### Ações automáticas por risco
+---
 
-**Baixo:** envia lembrete padrão.
+## JOBS BULLMQ
 
-**Médio:** exige confirmação. Se não confirmar em X horas, lembrete adicional.
+| Job | Quando | Tipo |
+|---|---|---|
+| `reminder_24h` | 24h antes do agendamento | Delayed |
+| `reminder_2h` | 2h antes | Delayed |
+| `confirmation_4h` | 4h antes (médio risco) | Delayed |
+| `confirmation_6h` | 6h antes (alto risco) | Delayed |
+| `cancel_unconfirmed` | A cada hora | Recorrente |
+| `recalc_all_scores` | Meia-noite diária | Recorrente |
+| `waitlist_notify` | Imediato ao cancelar | Imediato |
 
-**Alto:** exige confirmação dupla. Pode bloquear agendamento em horários premium.
+---
+
+## WEBHOOK WHATSAPP
+
+`POST /webhooks/whatsapp`
+
+Lógica de parsing:
+1. Ignora mensagens de grupo e `fromMe: true`
+2. Extrai texto de: `conversation`, `extendedTextMessage`, `buttonsResponseMessage`, `templateButtonReplyMessage`, `listResponseMessage`
+3. Busca cliente pelo telefone (com ou sem código 55)
+4. Prioridade: lista de espera pendente → agendamento ativo
+5. Reconhece: `sim/1/btn_confirm/confirmar` | `não/2/btn_cancel/cancelar` | `3/btn_reschedule/reagendar`
 
 ---
 
 ## MULTI-TENANT
 
-Cada empresa tem seus próprios dados isolados.
-
-- Usar `tenantId` em todas as tabelas
-- Resolver tenant pelo subdomínio ou pelo JWT
-- Nunca misturar dados entre tenants
-- Middleware de tenant obrigatório em todas as rotas autenticadas
+- `tenantId` em todas as tabelas
+- Tenant resolvido pelo JWT (`payload.tenantId`)
+- Middleware `authMiddleware` injeta `req.tenantId` e `req.user`
+- Configurações WhatsApp por tenant (sobrescrevem env vars)
+- Slug único por empresa (usado no login)
 
 ---
 
 ## PERMISSÕES
 
-| Perfil | Acesso |
+| Role | O que pode |
 |---|---|
-| Dono | Tudo |
-| Recepcionista | Agenda clientes, vê todos os agendamentos |
-| Funcionário | Vê apenas agenda própria |
-
----
-
-## BANCO DE DADOS — SCHEMA PRISMA
-
-```prisma
-model Tenant {
-  id        String   @id @default(uuid())
-  name      String
-  slug      String   @unique
-  plan      String   @default("basic")
-  createdAt DateTime @default(now())
-
-  users        User[]
-  clients      Client[]
-  appointments Appointment[]
-  waitlist     Waitlist[]
-}
-
-model User {
-  id       String @id @default(uuid())
-  tenantId String
-  name     String
-  email    String
-  role     String // owner | receptionist | employee
-  tenant   Tenant @relation(fields: [tenantId], references: [id])
-}
-
-model Client {
-  id           String   @id @default(uuid())
-  tenantId     String
-  name         String
-  phone        String
-  email        String?
-  riskScore    Int      @default(0)
-  createdAt    DateTime @default(now())
-  tenant       Tenant   @relation(fields: [tenantId], references: [id])
-  appointments Appointment[]
-}
-
-model Appointment {
-  id             String    @id @default(uuid())
-  tenantId       String
-  clientId       String
-  professionalId String
-  service        String
-  scheduledAt    DateTime
-  status         String    // scheduled | confirmed | cancelled | no_show
-  riskScore      Int       @default(0)
-  confirmedAt    DateTime?
-  cancelledAt    DateTime?
-  createdAt      DateTime  @default(now())
-  tenant         Tenant    @relation(fields: [tenantId], references: [id])
-  client         Client    @relation(fields: [clientId], references: [id])
-  notifications  Notification[]
-}
-
-model Waitlist {
-  id         String    @id @default(uuid())
-  tenantId   String
-  slot       DateTime
-  clientId   String
-  notifiedAt DateTime?
-  acceptedAt DateTime?
-  tenant     Tenant    @relation(fields: [tenantId], references: [id])
-}
-
-model Notification {
-  id            String    @id @default(uuid())
-  tenantId      String
-  appointmentId String
-  type          String    // reminder_24h | reminder_2h | confirmation | waitlist
-  channel       String    // whatsapp | email
-  status        String    // pending | sent | failed
-  sentAt        DateTime?
-  appointment   Appointment @relation(fields: [appointmentId], references: [id])
-}
-
-model AuditLog {
-  id        String   @id @default(uuid())
-  tenantId  String
-  userId    String?
-  action    String
-  entity    String
-  entityId  String
-  ip        String?
-  createdAt DateTime @default(now())
-}
-```
-
----
-
-## WHATSAPP
-
-### Fluxo de mensagem
-
-```
-Job dispara lembrete
-→ Backend envia via Evolution API
-→ Cliente responde com botão
-→ Webhook recebe resposta
-→ Sistema atualiza status do agendamento
-→ Se cancelou: aciona lista de espera
-```
-
-### Mensagem padrão
-
-```
-Olá {nome}.
-Você tem um agendamento amanhã às {hora} com {profissional}.
-Deseja confirmar sua presença?
-
-[✅ Confirmar] [❌ Cancelar] [🔄 Reagendar]
-```
-
-### Atenção
-
-Evolution API é self-hosted e não oficial. Usar apenas em desenvolvimento.
-Migrar para API oficial Meta (via 360dialog ou direta) antes de colocar clientes reais em produção.
-
----
-
-## BACKGROUND JOBS (BullMQ)
-
-| Job | Frequência |
-|---|---|
-| Enviar lembretes 24h antes | A cada hora |
-| Enviar lembretes 2h antes | A cada 15 min |
-| Cancelar agendamentos sem confirmação | A cada hora |
-| Acionar lista de espera | Imediato após cancelamento |
-| Recalcular score de clientes | Diário |
-
----
-
-## LGPD — OBRIGATÓRIO DESDE O DIA 1
-
-- Consentimento explícito no cadastro do cliente
-- Endpoint para exclusão de dados
-- Logs de auditoria para todas as alterações
-- Dados sensíveis criptografados
-- Política de privacidade visível na plataforma
-
----
-
-## ORDEM DE DESENVOLVIMENTO
-
-Seguir essa ordem. Não pular etapas.
-
-```
-1. Setup do projeto (Docker, PostgreSQL, Prisma, estrutura de pastas)
-2. Auth (JWT, multi-tenant, middleware de tenant)
-3. Cadastro de clientes e profissionais
-4. Módulo de agendamento (CRUD)
-5. Motor de risco (score por regras)
-6. Integração WhatsApp — envio de mensagem
-7. Webhook WhatsApp — receber confirmação/cancelamento
-8. Lista de espera
-9. Background jobs com BullMQ (lembretes automáticos)
-10. Dashboard básico
-```
+| `owner` | Tudo, incluindo deletar cliente (LGPD) |
+| `receptionist` | Criar/editar clientes e agendamentos |
+| `employee` | Ver apenas agenda própria (filtrado por `professionalId`) |
 
 ---
 
 ## PADRÕES DE CÓDIGO
 
-- **Idioma do código:** inglês (variáveis, funções, classes)
+- **Idioma do código:** inglês (variáveis, funções, nomes de arquivo)
 - **Idioma dos comentários:** português
-- **Commits:** português, objetivos ("Adiciona motor de risco", "Corrige webhook WhatsApp")
-- **Respostas da API:** sempre `{ success: boolean, message: string, data: any }`
-- **Validação:** Zod em todas as entradas
-- **Erros:** nunca deixar erro sem tratamento, sempre retornar mensagem clara
+- **Commits:** português, verbos imperativos ("Adiciona", "Corrige", "Remove")
+- **Resposta da API:** sempre `{ success: boolean, message: string, data: any }`
+- **Validação:** Zod em todas as entradas (routes)
+- **Erros:** capturados no `errorMiddleware`, ZodError retorna 400, outros 500
+- **Prisma:** singleton em `shared/utils/prisma.ts` usando `PrismaPg` (adapter pg pool)
 
 ---
 
-## O QUE NUNCA FAZER
+## COMO RODAR
 
-- Não adicionar complexidade antes de precisar
-- Não construir fora do escopo do MVP sem validar com usuário real
-- Não usar microserviços agora
-- Não integrar IA antes de ter faturamento e dados suficientes
-- Não começar app mobile antes de validar a web
-- Não colocar cliente real em produção usando Evolution API
+```bash
+# 1. Containers (postgres + redis + evolution-api)
+docker compose up -d
+
+# 2. Variáveis de ambiente
+cp backend/.env.example backend/.env
+# Editar backend/.env se necessário
+
+# 3. Migration
+cd backend && npm run db:migrate
+
+# 4. Backend (porta 4000)
+npm run dev
+
+# 5. Frontend (porta 3000, proxy /api → :4000)
+cd ../frontend && npm run dev
+
+# 6. Configurar webhook Evolution API (opcional, dev)
+./scripts/setup-whatsapp.ps1
+```
 
 ---
 
-## FASES FUTURAS (não construir agora)
+## PENDÊNCIAS REAIS (o que falta de fato)
 
-**Fase 2:** PIX, analytics avançado, sistema de reputação, automações configuráveis.
+### Crítico para produção
+- [ ] **Migrar WhatsApp para API oficial Meta** — Evolution API não é homologada; qualquer cliente real exige isso
+- [ ] **Configurar CORS** — backend sem CORS explícito; em produção vai quebrar se domínios forem diferentes
+- [ ] **Variável `JWT_SECRET`** — o `.env.example` tem valor placeholder; produção precisa de segredo real
+- [ ] **HTTPS + reverse proxy** — Nginx ou similar na frente do Express em produção
 
-**Fase 3:** Previsão de no-show com ML, análise comportamental.
+### Funcional mas incompleto
+- [ ] **professionalId no waitlist** — `waitlist.service.ts` usa `client.id` como `professionalId` ao criar agendamento via lista de espera (placeholder explícito no código, linha ~80 de `whatsapp.webhook.ts`)
+- [ ] **Reagendar via WhatsApp** — webhook cancela o agendamento mas não oferece horários; cliente precisa ligar ou acessar a plataforma
+- [ ] **Testes automatizados** — zero testes; risco alto para refatorações
 
-**Fase 4:** White-label, marketplace, IA conversacional, integrações massivas.
+### UX / produto
+- [ ] **Registro de empresa** — não há página de cadastro no frontend (só existe o endpoint `/api/auth/register`); novo cliente precisa usar curl ou Postman para criar conta
+- [ ] **Gestão de usuários** — não há como adicionar recepcionista pelo painel; só profissionais (employee)
+- [ ] **Filtro de agendamentos por data** — tabela mostra todos; sem paginação
+
+---
+
+## O QUE NÃO FAZER AGORA
+
+- Não adicionar IA, ML ou previsão avançada (sem dados reais ainda)
+- Não construir app mobile antes de validar a web com clientes reais
+- Não adicionar PIX/pagamento antes de ter faturamento próprio
+- Não escalar para microserviços (monolito ainda é adequado)
+- Não colocar cliente real em produção usando Evolution API (risco de bloqueio)
+
+---
+
+## PRÓXIMO PASSO REAL
+
+O backend está pronto. A prioridade agora é:
+
+1. **Criar página de cadastro de empresa no frontend** (para onboarding sem curl)
+2. **Validar o produto com 1–3 clientes reais** (mesmo que em desenvolvimento)
+3. **Definir o nicho prioritário** (odontologia? barbearia? psicologia?) antes de iterar em features
+
+Só depois de validação partir para Fase 2 (PIX, analytics avançado, reputação).
