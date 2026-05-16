@@ -21,6 +21,40 @@ router.get('/me', async (req: Request, res: Response, next: NextFunction) => {
 
 router.use(requireRole('owner'))
 
+// Métricas de agendamento por profissional (4 groupBy em paralelo, sem N+1)
+router.get('/metrics', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
+    const todayEnd   = new Date(); todayEnd.setHours(23, 59, 59, 999)
+
+    const [totalByPro, todayByPro, noShowByPro, confirmedByPro] = await Promise.all([
+      prisma.appointment.groupBy({ by: ['professionalId'], where: { tenantId: req.tenantId }, _count: { _all: true } }),
+      prisma.appointment.groupBy({ by: ['professionalId'], where: { tenantId: req.tenantId, scheduledAt: { gte: todayStart, lte: todayEnd } }, _count: { _all: true } }),
+      prisma.appointment.groupBy({ by: ['professionalId'], where: { tenantId: req.tenantId, status: 'no_show' }, _count: { _all: true } }),
+      prisma.appointment.groupBy({ by: ['professionalId'], where: { tenantId: req.tenantId, status: 'confirmed' }, _count: { _all: true } }),
+    ])
+
+    type GroupRow = { professionalId: string; _count: { _all: number } }
+    const toMap = (rows: GroupRow[]) => new Map(rows.map(r => [r.professionalId, r._count._all]))
+    const totalMap     = toMap(totalByPro)
+    const todayMap     = toMap(todayByPro)
+    const noShowMap    = toMap(noShowByPro)
+    const confirmedMap = toMap(confirmedByPro)
+
+    const users = await prisma.user.findMany({ where: { tenantId: req.tenantId }, select: { id: true } })
+    const metrics = users.map(u => {
+      const total     = totalMap.get(u.id) ?? 0
+      const today     = todayMap.get(u.id) ?? 0
+      const noShows   = noShowMap.get(u.id) ?? 0
+      const confirmed = confirmedMap.get(u.id) ?? 0
+      const concluded = noShows + confirmed
+      return { userId: u.id, total, today, noShows, attendanceRate: concluded > 0 ? Math.round((confirmed / concluded) * 100) : null }
+    })
+
+    res.json(ok(metrics))
+  } catch (err) { next(err) }
+})
+
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const users = await prisma.user.findMany({

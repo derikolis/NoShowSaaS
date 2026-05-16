@@ -1,4 +1,4 @@
-import { useEffect, useState, FormEvent } from 'react'
+import { useEffect, useState, useCallback, FormEvent } from 'react'
 import { X, Mail, Calendar, UsersRound, Search, ShieldCheck, Pencil } from 'lucide-react'
 import Layout from '../../components/Layout'
 import api from '../../services/api'
@@ -7,6 +7,10 @@ import api from '../../services/api'
 
 interface TeamMember {
   id: string; name: string; email: string; role: string; createdAt: string
+}
+
+interface UserMetrics {
+  userId: string; total: number; today: number; noShows: number; attendanceRate: number | null
 }
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -44,13 +48,8 @@ function MemberDrawer({
   const [editPass,   setEditPass]   = useState('')
 
   const inputCls = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white'
-
-  const initials = member.name
-    .split(' ').filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase()
-
-  const createdAt = new Date(member.createdAt).toLocaleDateString('pt-BR', {
-    day: '2-digit', month: 'long', year: 'numeric',
-  })
+  const initials  = member.name.split(' ').filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase()
+  const createdAt = new Date(member.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
 
   async function handleSave(e: FormEvent) {
     e.preventDefault(); setSaving(true)
@@ -82,7 +81,7 @@ function MemberDrawer({
   return (
     <>
       <div className="fixed inset-0 bg-black/25 z-40" onClick={onClose} />
-      <div className="fixed inset-y-0 right-0 w-[400px] bg-white z-50 shadow-2xl flex flex-col">
+      <div className="fixed inset-y-0 right-0 w-100 bg-white z-50 shadow-2xl flex flex-col">
 
         {/* Header */}
         <div className="flex items-start justify-between px-6 py-5 border-b border-gray-100">
@@ -102,7 +101,6 @@ function MemberDrawer({
           </button>
         </div>
 
-        {/* Body */}
         <div className="flex-1 overflow-y-auto">
 
           {/* Info / Edit */}
@@ -125,7 +123,9 @@ function MemberDrawer({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Nova senha <span className="text-gray-400 font-normal">(deixe em branco para manter)</span></label>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">
+                    Nova senha <span className="text-gray-400 font-normal">(deixe em branco para manter)</span>
+                  </label>
                   <input type="password" value={editPass} onChange={e => setEditPass(e.target.value)} minLength={6} placeholder="Mín. 6 caracteres" className={inputCls} />
                 </div>
                 <div className="flex gap-2 pt-1">
@@ -148,12 +148,8 @@ function MemberDrawer({
                   <span>Membro desde {createdAt}</span>
                 </div>
                 {member.role !== 'owner' && (
-                  <button
-                    onClick={() => setEditing(true)}
-                    className="mt-1 flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-800 cursor-pointer"
-                  >
-                    <Pencil size={12} />
-                    Editar informações
+                  <button onClick={() => setEditing(true)} className="mt-1 flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-800 cursor-pointer">
+                    <Pencil size={12} /> Editar informações
                   </button>
                 )}
               </div>
@@ -192,27 +188,17 @@ function MemberDrawer({
             <div className="px-6 py-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Ações</p>
               {!confirming ? (
-                <button
-                  onClick={() => setConfirming(true)}
-                  className="w-full py-2.5 bg-white hover:bg-red-50 text-red-600 text-sm font-semibold rounded-lg border border-red-200 transition-colors cursor-pointer"
-                >
+                <button onClick={() => setConfirming(true)} className="w-full py-2.5 bg-white hover:bg-red-50 text-red-600 text-sm font-semibold rounded-lg border border-red-200 transition-colors cursor-pointer">
                   Remover da equipe
                 </button>
               ) : (
                 <div className="space-y-2">
                   <p className="text-sm text-gray-600 text-center">Confirmar remoção de <strong>{member.name}</strong>?</p>
                   <div className="flex gap-2">
-                    <button
-                      onClick={() => setConfirming(false)}
-                      className="flex-1 py-2.5 bg-white hover:bg-gray-50 text-gray-600 text-sm font-semibold rounded-lg border border-gray-200 transition-colors cursor-pointer"
-                    >
+                    <button onClick={() => setConfirming(false)} className="flex-1 py-2.5 bg-white hover:bg-gray-50 text-gray-600 text-sm font-semibold rounded-lg border border-gray-200 transition-colors cursor-pointer">
                       Cancelar
                     </button>
-                    <button
-                      onClick={handleRemove}
-                      disabled={removing}
-                      className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors cursor-pointer"
-                    >
+                    <button onClick={handleRemove} disabled={removing} className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors cursor-pointer">
                       {removing ? 'Removendo...' : 'Remover'}
                     </button>
                   </div>
@@ -231,9 +217,7 @@ function MemberDrawer({
 function NewMemberModal({
   onClose, onCreated, showToast,
 }: {
-  onClose: () => void
-  onCreated: () => void
-  showToast: (msg: string) => void
+  onClose: () => void; onCreated: () => void; showToast: (msg: string) => void
 }) {
   const [name,     setName]     = useState('')
   const [email,    setEmail]    = useState('')
@@ -250,9 +234,7 @@ function NewMemberModal({
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status
       showToast(status === 409 ? 'Email já em uso' : 'Erro ao criar usuário')
-    } finally {
-      setSaving(false)
-    }
+    } finally { setSaving(false) }
   }
 
   const inputCls = 'w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white'
@@ -264,38 +246,23 @@ function NewMemberModal({
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
           <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
             <h2 className="text-base font-semibold text-gray-900">Adicionar membro</h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 cursor-pointer">
-              <X size={18} />
-            </button>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 cursor-pointer"><X size={18} /></button>
           </div>
-
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">Nome *</label>
-                <input
-                  value={name} onChange={e => setName(e.target.value)}
-                  required minLength={2} placeholder="Nome completo"
-                  className={inputCls}
-                />
+                <input value={name} onChange={e => setName(e.target.value)} required minLength={2} placeholder="Nome completo" className={inputCls} />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">Email *</label>
-                <input
-                  type="email" value={email} onChange={e => setEmail(e.target.value)}
-                  required placeholder="email@empresa.com"
-                  className={inputCls}
-                />
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="email@empresa.com" className={inputCls} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">Senha *</label>
-                <input
-                  type="password" value={password} onChange={e => setPassword(e.target.value)}
-                  required minLength={6} placeholder="Mín. 6 caracteres"
-                  className={inputCls}
-                />
+                <input type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6} placeholder="Mín. 6 caracteres" className={inputCls} />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">Perfil *</label>
@@ -314,10 +281,7 @@ function NewMemberModal({
               <button type="button" onClick={onClose} className="px-4 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-800 cursor-pointer">
                 Cancelar
               </button>
-              <button
-                type="submit" disabled={saving}
-                className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors cursor-pointer"
-              >
+              <button type="submit" disabled={saving} className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors cursor-pointer">
                 {saving ? 'Salvando...' : 'Adicionar'}
               </button>
             </div>
@@ -328,35 +292,104 @@ function NewMemberModal({
   )
 }
 
+// ─── Member Card ──────────────────────────────────────────────────────────────
+
+function MemberCard({
+  member, metrics, onClick,
+}: {
+  member: TeamMember
+  metrics: UserMetrics | undefined
+  onClick: () => void
+}) {
+  const initials = member.name.split(' ').filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase()
+
+  return (
+    <button
+      onClick={onClick}
+      className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 text-left hover:shadow-md hover:border-gray-200 transition-all cursor-pointer w-full group"
+    >
+      {/* Top: avatar + name + role */}
+      <div className="flex items-start gap-3 mb-4">
+        <div className="relative shrink-0">
+          <div className="w-11 h-11 rounded-full bg-indigo-100 flex items-center justify-center text-sm font-bold text-indigo-700">
+            {initials}
+          </div>
+          {metrics && metrics.today > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-white" title="Com agenda hoje" />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold text-gray-900 truncate group-hover:text-indigo-700 transition-colors">{member.name}</p>
+          <span className={`text-xs font-medium px-2 py-0.5 rounded-full inline-block mt-1 ${ROLE_CLASS[member.role] ?? 'bg-gray-100 text-gray-600'}`}>
+            {ROLE_LABEL[member.role] ?? member.role}
+          </span>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-2 pt-4 border-t border-gray-50">
+        <div className="text-center">
+          <p className="text-lg font-bold text-gray-900">{metrics?.total ?? 0}</p>
+          <p className="text-xs text-gray-400 mt-0.5">Agendamentos</p>
+        </div>
+        <div className="text-center border-l border-gray-100">
+          <p className={`text-lg font-bold ${metrics?.today ? 'text-green-600' : 'text-gray-400'}`}>
+            {metrics?.today ?? 0}
+          </p>
+          <p className="text-xs text-gray-400 mt-0.5">Hoje</p>
+        </div>
+        <div className="text-center border-l border-gray-100">
+          <p className={`text-lg font-bold ${
+            metrics?.attendanceRate == null ? 'text-gray-400'
+            : metrics.attendanceRate >= 80 ? 'text-green-600'
+            : metrics.attendanceRate >= 60 ? 'text-yellow-600'
+            : 'text-red-600'
+          }`}>
+            {metrics?.attendanceRate != null ? `${metrics.attendanceRate}%` : '—'}
+          </p>
+          <p className="text-xs text-gray-400 mt-0.5">Comparecimento</p>
+        </div>
+      </div>
+    </button>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ProfessionalsPage() {
   const [team,     setTeam]     = useState<TeamMember[]>([])
+  const [metrics,  setMetrics]  = useState<UserMetrics[]>([])
   const [selected, setSelected] = useState<TeamMember | null>(null)
   const [showNew,  setShowNew]  = useState(false)
   const [search,   setSearch]   = useState('')
   const [toast,    setToast]    = useState('')
 
   function showToast(msg: string) {
-    setToast(msg)
-    setTimeout(() => setToast(''), 3000)
+    setToast(msg); setTimeout(() => setToast(''), 3000)
   }
 
-  function load() {
-    api.get('/users').then(({ data }) => setTeam(data.data))
-  }
+  const load = useCallback(() => {
+    Promise.all([
+      api.get('/users'),
+      api.get('/users/metrics'),
+    ]).then(([usersRes, metricsRes]) => {
+      setTeam(usersRes.data.data)
+      setMetrics(metricsRes.data.data)
+    })
+  }, [])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [load])
+
+  const metricsMap = new Map(metrics.map(m => [m.userId, m]))
 
   const filtered = team.filter(m =>
     m.name.toLowerCase().includes(search.toLowerCase()) ||
     m.email.toLowerCase().includes(search.toLowerCase())
   )
 
-  function handleDeleted() {
-    setSelected(null)
-    load()
-  }
+  const owners        = team.filter(m => m.role === 'owner').length
+  const receptionists = team.filter(m => m.role === 'receptionist').length
+  const employees     = team.filter(m => m.role === 'employee').length
 
   return (
     <Layout>
@@ -385,10 +418,7 @@ export default function ProfessionalsPage() {
                 className="pl-9 pr-8 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64"
               />
               {search && (
-                <button
-                  onClick={() => setSearch('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
-                >
+                <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer">
                   <X size={14} />
                 </button>
               )}
@@ -402,72 +432,47 @@ export default function ProfessionalsPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide border-b border-gray-100">
-                <th className="px-5 py-3">Membro</th>
-                <th className="px-5 py-3">Email</th>
-                <th className="px-5 py-3">Perfil</th>
-                <th className="px-5 py-3">Desde</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-5 py-16 text-center">
-                    <div className="flex flex-col items-center gap-3">
-                      <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
-                        {search
-                          ? <Search size={22} className="text-gray-300" />
-                          : <UsersRound size={22} className="text-gray-300" />
-                        }
-                      </div>
-                      {search ? (
-                        <>
-                          <p className="text-sm text-gray-400">Nenhum resultado para "{search}"</p>
-                          <button
-                            onClick={() => setSearch('')}
-                            className="text-xs text-indigo-600 hover:underline cursor-pointer"
-                          >
-                            Limpar busca
-                          </button>
-                        </>
-                      ) : (
-                        <p className="text-sm text-gray-400">Nenhum membro cadastrado</p>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              )}
-              {filtered.map(m => (
-                <tr
-                  key={m.id}
-                  onClick={() => setSelected(m)}
-                  className="hover:bg-gray-50 cursor-pointer transition-colors"
-                >
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-700 shrink-0">
-                        {m.name.split(' ').filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase()}
-                      </div>
-                      <span className="font-medium text-gray-900">{m.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3.5 text-gray-500">{m.email}</td>
-                  <td className="px-5 py-3.5">
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${ROLE_CLASS[m.role] ?? 'bg-gray-100 text-gray-600'}`}>
-                      {ROLE_LABEL[m.role] ?? m.role}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5 text-gray-400 text-xs">
-                    {new Date(m.createdAt).toLocaleDateString('pt-BR')}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        {/* Role summary */}
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          {[
+            { label: 'Donos',          value: owners,        color: 'text-indigo-600' },
+            { label: 'Recepcionistas', value: receptionists, color: 'text-blue-600'   },
+            { label: 'Profissionais',  value: employees,     color: 'text-gray-700'   },
+          ].map(c => (
+            <div key={c.label} className="bg-white rounded-xl border border-gray-100 shadow-sm px-5 py-4">
+              <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">{c.label}</p>
+              <p className={`text-2xl font-bold mt-1 ${c.color}`}>{c.value}</p>
+            </div>
+          ))}
         </div>
+
+        {/* Cards grid */}
+        {filtered.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-20">
+            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
+              {search ? <Search size={22} className="text-gray-300" /> : <UsersRound size={22} className="text-gray-300" />}
+            </div>
+            <p className="text-sm text-gray-400">
+              {search ? `Nenhum resultado para "${search}"` : 'Nenhum membro cadastrado'}
+            </p>
+            {search && (
+              <button onClick={() => setSearch('')} className="text-xs text-indigo-600 hover:underline cursor-pointer">
+                Limpar busca
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-4">
+            {filtered.map(m => (
+              <MemberCard
+                key={m.id}
+                member={m}
+                metrics={metricsMap.get(m.id)}
+                onClick={() => setSelected(m)}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {selected && (
@@ -475,7 +480,7 @@ export default function ProfessionalsPage() {
           member={selected}
           onClose={() => setSelected(null)}
           onUpdated={updated => { setSelected(updated); load() }}
-          onDeleted={handleDeleted}
+          onDeleted={() => { setSelected(null); load() }}
           showToast={showToast}
         />
       )}
