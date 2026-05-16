@@ -384,7 +384,7 @@ export default function BookingPage() {
                 <button
                   key={d.iso}
                   onClick={() => setDate(d.iso)}
-                  className={`flex flex-col items-center p-3 rounded-xl min-w-[56px] transition-all cursor-pointer border ${
+                  className={`flex flex-col items-center p-3 rounded-xl min-w-14 transition-all cursor-pointer border ${
                     date === d.iso
                       ? 'bg-indigo-600 border-indigo-600 text-white shadow-md scale-105'
                       : 'bg-white border-gray-200 text-gray-700 hover:border-indigo-300'

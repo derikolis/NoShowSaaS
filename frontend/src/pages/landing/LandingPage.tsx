@@ -284,7 +284,7 @@ export default function LandingPage() {
       </header>
 
       {/* ── Hero ───────────────────────────────────────────────────────────── */}
-      <section className="relative bg-gradient-to-br from-indigo-950 via-indigo-900 to-indigo-800 text-white overflow-hidden">
+      <section className="relative bg-linear-to-br from-indigo-950 via-indigo-900 to-indigo-800 text-white overflow-hidden">
         {/* Decoração de fundo */}
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl translate-x-1/2 -translate-y-1/2" />
@@ -299,7 +299,7 @@ export default function LandingPage() {
 
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold leading-tight tracking-tight mb-6">
             Elimine até{' '}
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-300">
+            <span className="text-transparent bg-clip-text bg-linear-to-r from-green-400 to-emerald-300">
               70% das faltas
             </span>
             <br className="hidden sm:block" />
@@ -402,7 +402,7 @@ export default function LandingPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
             {/* Linha de conexão (desktop) */}
-            <div className="hidden md:block absolute top-10 left-1/4 right-1/4 h-0.5 bg-gradient-to-r from-indigo-200 via-indigo-400 to-indigo-200" />
+            <div className="hidden md:block absolute top-10 left-1/4 right-1/4 h-0.5 bg-linear-to-r from-indigo-200 via-indigo-400 to-indigo-200" />
 
             {HOW_IT_WORKS.map(({ step, title, desc }) => (
               <div key={step} className="text-center relative">
@@ -605,7 +605,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── CTA final ──────────────────────────────────────────────────────── */}
-      <section className="bg-gradient-to-br from-indigo-900 to-indigo-800 py-20 md:py-24 text-white text-center">
+      <section className="bg-linear-to-br from-indigo-900 to-indigo-800 py-20 md:py-24 text-white text-center">
         <div className="max-w-3xl mx-auto px-4 sm:px-6">
           <p className="text-sm font-semibold text-indigo-300 uppercase tracking-widest mb-4">Pronto para começar?</p>
           <h2 className="text-3xl md:text-5xl font-bold mb-5 leading-tight">
