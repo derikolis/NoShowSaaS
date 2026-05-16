@@ -329,38 +329,35 @@ export default function AppointmentsPage() {
                   </td>
                   <td className="px-6 py-3"><RiskBadge score={a.riskScore} /></td>
                   <td className="px-6 py-3">
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-1.5">
                       {a.status === 'scheduled' && (
                         <>
-                          <button onClick={() => action(a.id, 'confirm')} className="text-xs text-green-700 hover:text-green-900 font-medium">Confirmar</button>
-                          <button onClick={() => setRescheduleId(rescheduleId === a.id ? null : a.id)} className="text-xs text-indigo-600 hover:text-indigo-800 font-medium">Reagendar</button>
-                          <button onClick={() => action(a.id, 'cancel')} className="text-xs text-red-600 hover:text-red-800 font-medium">Cancelar</button>
+                          <button onClick={() => action(a.id, 'confirm')} className="text-xs font-medium px-2.5 py-1 rounded-md cursor-pointer border border-green-200 bg-green-50 text-green-700 hover:bg-green-100 transition-colors">Confirmar</button>
+                          <button onClick={() => setRescheduleId(rescheduleId === a.id ? null : a.id)} className="text-xs font-medium px-2.5 py-1 rounded-md cursor-pointer border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors">Reagendar</button>
+                          <button onClick={() => action(a.id, 'cancel')} className="text-xs font-medium px-2.5 py-1 rounded-md cursor-pointer border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition-colors">Cancelar</button>
                         </>
                       )}
                       {rescheduleId === a.id && (
-                        <form onSubmit={handleReschedule} className="flex gap-2 mt-1 col-span-full">
+                        <form onSubmit={handleReschedule} className="flex gap-2 mt-1 w-full">
                           <input
                             type="datetime-local"
                             value={newScheduledAt}
                             onChange={e => setNewScheduledAt(e.target.value)}
                             required
-                            className="px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            className="px-2 py-1 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
-                          <button type="submit" className="text-xs bg-indigo-600 text-white px-2 py-1 rounded hover:bg-indigo-700">Confirmar</button>
+                          <button type="submit" className="text-xs font-medium px-2.5 py-1 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">Confirmar</button>
                         </form>
                       )}
                       {a.status === 'confirmed' && (
-                        <button
-                          onClick={() => action(a.id, 'no-show')}
-                          className="text-xs text-orange-600 hover:text-orange-800 font-medium"
-                        >
+                        <button onClick={() => action(a.id, 'no-show')} className="text-xs font-medium px-2.5 py-1 rounded-md cursor-pointer border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 transition-colors">
                           No-show
                         </button>
                       )}
                       {a.status === 'cancelled' && (
                         <button
                           onClick={() => openWaitlist(a.scheduledAt)}
-                          className={`text-xs font-medium px-2 py-0.5 rounded transition-colors ${waitlistSlot === a.scheduledAt ? 'bg-indigo-100 text-indigo-700' : 'text-indigo-600 hover:text-indigo-800'}`}
+                          className={`text-xs font-medium px-2.5 py-1 rounded-md cursor-pointer border transition-colors ${waitlistSlot === a.scheduledAt ? 'border-indigo-300 bg-indigo-100 text-indigo-700' : 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}`}
                         >
                           Lista de espera
                         </button>

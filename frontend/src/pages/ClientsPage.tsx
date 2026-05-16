@@ -194,7 +194,7 @@ export default function ClientsPage() {
                       : <span className="text-xs text-red-500 font-medium">Não</span>}
                   </td>
                   <td className="px-6 py-3">
-                    <button onClick={() => deleteClient(c)} className="text-xs text-red-400 hover:text-red-600">
+                    <button onClick={() => deleteClient(c)} className="text-xs font-medium px-2.5 py-1 rounded-md cursor-pointer border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition-colors">
                       Remover
                     </button>
                   </td>
