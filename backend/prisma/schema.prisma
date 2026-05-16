@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model Tenant {
@@ -12,17 +11,16 @@ model Tenant {
   name      String
   slug      String   @unique
   plan      String   @default("basic")
-  status    String   @default("active") // active | inactive | blocked
+  status    String   @default("active")
   createdAt DateTime @default(now())
 
-  // Configurações WhatsApp por tenant (sobrescrevem as variáveis de ambiente)
-  whatsappPhone        String? // número que os clientes verão como remetente
+  whatsappPhone        String?
   evolutionApiUrl      String?
   evolutionApiKey      String?
   evolutionInstance    String?
-  reminderTemplate     String? // template do lembrete; placeholders: {nome} {hora} {profissional} {data}
-  confirmationTemplate String? // template da confirmação; placeholders: {nome} {hora} {data}
-  peakHours            Json?   // [{"start":12,"end":14},{"start":18,"end":20}]
+  reminderTemplate     String?
+  confirmationTemplate String?
+  peakHours            Json?
 
   users        User[]
   clients      Client[]
@@ -37,7 +35,7 @@ model User {
   name         String
   email        String
   passwordHash String
-  role         String   // owner | receptionist | employee
+  role         String
   createdAt    DateTime @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
@@ -54,7 +52,7 @@ model Client {
   riskScore    Int       @default(0)
   isVip        Boolean   @default(false)
   consentedAt  DateTime?
-  passwordHash String?   // preenchido quando o cliente cria conta no portal
+  passwordHash String?
   createdAt    DateTime  @default(now())
 
   tenant       Tenant        @relation(fields: [tenantId], references: [id])
@@ -69,7 +67,7 @@ model Appointment {
   professionalId String
   service        String
   scheduledAt    DateTime
-  status         String    @default("scheduled") // scheduled | confirmed | cancelled | no_show
+  status         String    @default("scheduled")
   riskScore      Int       @default(0)
   confirmedAt    DateTime?
   cancelledAt    DateTime?
@@ -99,9 +97,9 @@ model Notification {
   id            String    @id @default(uuid())
   tenantId      String
   appointmentId String
-  type          String    // reminder_24h | reminder_2h | confirmation | waitlist
-  channel       String    @default("whatsapp") // whatsapp | email
-  status        String    @default("pending")  // pending | sent | failed
+  type          String
+  channel       String    @default("whatsapp")
+  status        String    @default("pending")
   sentAt        DateTime?
   createdAt     DateTime  @default(now())
 
@@ -113,7 +111,7 @@ model Service {
   tenantId    String
   name        String
   description String?
-  duration    Int      // em minutos
+  duration    Int
   price       Float?
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
