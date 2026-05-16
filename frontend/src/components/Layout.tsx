@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, CalendarDays, Users, UsersRound,
-  Settings, LogOut, PanelLeftClose, PanelLeftOpen,
+  Settings, LogOut, PanelLeftClose, PanelLeftOpen, Briefcase, Link2, Check,
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 
@@ -17,14 +17,24 @@ const ALL_LINKS = [
   { to: '/appointments',  label: 'Agendamentos',  icon: CalendarDays,    roles: ['owner', 'receptionist', 'employee'] },
   { to: '/clients',       label: 'Clientes',      icon: Users,           roles: ['owner', 'receptionist']             },
   { to: '/professionals', label: 'Equipe',        icon: UsersRound,      roles: ['owner']                             },
+  { to: '/services',      label: 'Serviços',      icon: Briefcase,       roles: ['owner']                             },
   { to: '/settings',      label: 'Configurações', icon: Settings,        roles: ['owner']                             },
 ]
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-  const { role, name, logout } = useAuth()
+  const { role, name, slug, logout } = useAuth()
   const navigate = useNavigate()
 
-  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar_collapsed') === 'true') // padrão: expandido
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar_collapsed') === 'true')
+  const [copied,    setCopied]    = useState(false)
+
+  function copyBookingLink() {
+    const url = `${window.location.origin}/agendar/${slug}`
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
 
   function toggle() {
     const next = !collapsed
@@ -51,8 +61,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div className={`flex items-center border-b border-indigo-800 h-14 px-3 ${collapsed ? 'justify-center' : 'justify-between px-4'}`}>
           {!collapsed && (
             <div className="leading-tight">
-              <p className="text-[10px] font-semibold text-indigo-300 uppercase tracking-widest">No-Show</p>
-              <p className="text-base font-bold">Protection</p>
+              <p className="text-base font-bold tracking-wide">Kired</p>
             </div>
           )}
           <button
@@ -89,6 +98,30 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               )}
             </NavLink>
           ))}
+
+          {/* Divisor */}
+          <div className="pt-1 pb-0.5">
+            <div className="border-t border-indigo-800" />
+          </div>
+
+          {/* Link de agendamento */}
+          <button
+            onClick={copyBookingLink}
+            className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer group
+              ${copied
+                ? 'bg-green-600 text-white'
+                : 'text-indigo-200 hover:bg-indigo-800 hover:text-white'
+              }
+              ${collapsed ? 'justify-center' : ''}`}
+          >
+            {copied ? <Check size={18} className="shrink-0" /> : <Link2 size={18} className="shrink-0" />}
+            {!collapsed && <span className="truncate">{copied ? 'Link copiado!' : 'Link de agendamento'}</span>}
+            {collapsed && (
+              <span className="absolute left-full ml-3 px-2.5 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
+                {copied ? 'Copiado!' : 'Link de agendamento'}
+              </span>
+            )}
+          </button>
         </nav>
 
         {/* ── Footer ─────────────────────────────────────────────────────────── */}

@@ -41,7 +41,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-linear-to-br from-indigo-50 to-indigo-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-indigo-900">No-Show Protection</h1>
+          <h1 className="text-3xl font-bold text-indigo-900">Kired</h1>
           <p className="text-gray-500 mt-2">Acesse o painel da sua empresa</p>
         </div>
 
