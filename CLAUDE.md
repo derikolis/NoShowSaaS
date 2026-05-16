@@ -1,16 +1,17 @@
 # CLAUDE.md — No-Show Protection SaaS
-> Estado atual do projeto em 15/05/2026. Consultar no início de cada sessão.
+> Estado atual do projeto em 16/05/2026. Consultar no início de cada sessão.
 
 ---
 
 ## STATUS DO MVP
 
 **Backend: COMPLETO** — todas as 10 etapas implementadas e funcionando.
-**Frontend: COMPLETO** — todas as páginas construídas.
+**Frontend: COMPLETO + POLIDO** — todas as páginas construídas e melhoradas.
+**Admin: COMPLETO** — painel super admin em `/admin` com login próprio.
 **Integração WhatsApp: parcial** — Evolution API configurada para dev; webhook recebendo.
 
 O produto está tecnicamente pronto para teste com usuário real.
-O próximo passo é validação, não mais código de backend.
+O próximo passo é validação, não mais código.
 
 ---
 
@@ -21,7 +22,7 @@ O próximo passo é validação, não mais código de backend.
 | Módulo | Arquivo | Status |
 |---|---|---|
 | Auth (JWT + multi-tenant) | `modules/auth/` | ✅ Completo |
-| Clientes (CRUD + LGPD) | `modules/clients/` | ✅ Completo |
+| Clientes (CRUD + LGPD + histórico) | `modules/clients/` | ✅ Completo |
 | Profissionais | `modules/professionals/` | ✅ Completo |
 | Agendamentos | `modules/scheduling/` | ✅ Completo |
 | Motor de risco (score) | `modules/risk-engine/` | ✅ Completo |
@@ -32,17 +33,25 @@ O próximo passo é validação, não mais código de backend.
 | Webhook WhatsApp | `webhooks/whatsapp.webhook.ts` | ✅ Completo |
 | Jobs BullMQ (lembretes) | `jobs/` | ✅ Completo |
 | Auditoria | `shared/utils/audit.ts` | ✅ Completo |
+| Admin (painel super admin) | `modules/admin/` | ✅ Completo |
+| Métricas por profissional | `modules/users/users.routes.ts` | ✅ GET /users/metrics |
 
 ### Frontend (`/frontend/src`)
 
-| Página | Arquivo | Status |
-|---|---|---|
-| Login | `pages/LoginPage.tsx` | ✅ Completo |
-| Dashboard | `pages/DashboardPage.tsx` | ✅ Completo |
-| Agendamentos | `pages/AppointmentsPage.tsx` | ✅ Completo |
-| Clientes | `pages/ClientsPage.tsx` | ✅ Completo |
-| Profissionais | `pages/ProfessionalsPage.tsx` | ✅ Completo |
-| Configurações / WhatsApp | `pages/SettingsPage.tsx` | ✅ Completo |
+Estrutura de pastas: `pages/app/` (tenant), `pages/admin/` (super admin), `pages/client/` (reservado para portal do cliente final)
+
+| Página | Arquivo | Status | Destaques |
+|---|---|---|---|
+| Login | `pages/app/LoginPage.tsx` | ✅ | Toggle de senha |
+| Cadastro | `pages/app/RegisterPage.tsx` | ✅ | Força de senha + regras em tempo real |
+| Dashboard | `pages/app/DashboardPage.tsx` | ✅ | Agenda do dia, gráfico no-shows, comparativo semanal |
+| Agendamentos | `pages/app/AppointmentsPage.tsx` | ✅ | Navegação Dia/Semana/Mês, filtro profissional, ações inline |
+| Clientes | `pages/app/ClientsPage.tsx` | ✅ | Cards de resumo, última visita, histórico no drawer |
+| Profissionais | `pages/app/ProfessionalsPage.tsx` | ✅ | Grid de cards com métricas por profissional |
+| Configurações | `pages/app/SettingsPage.tsx` | ✅ | Nav lateral, WhatsApp QR |
+| Admin Login | `pages/admin/AdminLoginPage.tsx` | ✅ | Tema escuro, credenciais via env |
+| Admin Dashboard | `pages/admin/AdminDashboardPage.tsx` | ✅ | KPIs de tenants |
+| Admin Empresas | `pages/admin/AdminTenantsPage.tsx` | ✅ | CRUD de tenants, ativar/bloquear |
 
 ### Banco de dados
 
@@ -50,6 +59,7 @@ Migrations aplicadas:
 - Schema base (Tenant, User, Client, Appointment, Waitlist, Notification, AuditLog)
 - LGPD: campo `consentedAt` no Client
 - WhatsApp: campos Evolution API por tenant
+- `status` no Tenant (active | inactive | blocked)
 
 ---
 
@@ -77,14 +87,16 @@ Monolito modular. Cada módulo em `/backend/src/modules/<nome>/`.
 backend/src/
   modules/
     auth/           → register, login
-    clients/        → CRUD, LGPD delete
+    admin/          → adminLogin, stats, listTenants, createTenant, updateStatus
+    clients/        → CRUD, LGPD delete, getClientHistory (últimos 5 + stats)
     professionals/  → CRUD (só owner cria)
     scheduling/     → create, cancel, confirm, reschedule, no-show
     risk-engine/    → calculateScore, recalculateClientScore
     notifications/  → scheduleRiskBasedReminders, sendWhatsApp
     waitlist/       → addToWaitlist, notifyNextInWaitlist
-    dashboard/      → getDashboardStats
+    dashboard/      → getDashboardStats (today, weekComparison, noShowsByDay)
     settings/       → status WA, QR, test, evolutionInstance por tenant
+    users/          → CRUD, GET /metrics (stats por profissional)
   webhooks/
     whatsapp.webhook.ts  → recebe eventos Evolution API
   jobs/
@@ -92,10 +104,23 @@ backend/src/
     scheduler.ts         → jobs recorrentes (cron)
     notification.worker.ts → processa todos os tipos de job
   shared/
-    middlewares/     → authMiddleware, requireRole, errorMiddleware
+    middlewares/     → authMiddleware, requireRole, adminMiddleware, errorMiddleware
     types/           → ApiResponse, JwtPayload, express.d.ts
     utils/           → prisma.ts (PrismaPg), audit.ts
 ```
+
+---
+
+## AUTENTICAÇÃO — DOIS SISTEMAS SEPARADOS
+
+| Sistema | Token | Armazenamento | Proteção |
+|---|---|---|---|
+| Tenant (empresa) | `noshow_token` | localStorage | `authMiddleware` |
+| Super Admin | `noshow_admin_token` | localStorage | `adminMiddleware` (role: superadmin) |
+
+- `App.tsx` lê localStorage diretamente (não usa hook) para evitar estado stale entre instâncias
+- Login e logout usam `window.location.href` (reload forçado) para garantir leitura fresca do token
+- Credenciais admin via env vars: `ADMIN_EMAIL` + `ADMIN_PASSWORD_HASH`
 
 ---
 
@@ -155,6 +180,7 @@ Lógica de parsing:
 - Middleware `authMiddleware` injeta `req.tenantId` e `req.user`
 - Configurações WhatsApp por tenant (sobrescrevem env vars)
 - Slug único por empresa (usado no login)
+- Tenant pode ter status `active | inactive | blocked` (bloqueado = login negado)
 
 ---
 
@@ -162,7 +188,8 @@ Lógica de parsing:
 
 | Role | O que pode |
 |---|---|
-| `owner` | Tudo, incluindo deletar cliente (LGPD) |
+| `superadmin` | Painel /admin — gerencia todos os tenants |
+| `owner` | Tudo dentro do tenant, incluindo deletar cliente (LGPD) |
 | `receptionist` | Criar/editar clientes e agendamentos |
 | `employee` | Ver apenas agenda própria (filtrado por `professionalId`) |
 
@@ -188,18 +215,21 @@ docker compose up -d
 
 # 2. Variáveis de ambiente
 cp backend/.env.example backend/.env
-# Editar backend/.env se necessário
+# Editar backend/.env — especialmente ADMIN_EMAIL e ADMIN_PASSWORD_HASH
 
-# 3. Migration
+# 3. Gerar hash da senha admin
+node -e "require('bcryptjs').hash('sua-senha',10).then(console.log)"
+
+# 4. Migration
 cd backend && npm run db:migrate
 
-# 4. Backend (porta 4000)
+# 5. Backend (porta 4000)
 npm run dev
 
-# 5. Frontend (porta 3000, proxy /api → :4000)
+# 6. Frontend (porta 3000, proxy /api → :4000)
 cd ../frontend && npm run dev
 
-# 6. Configurar webhook Evolution API (opcional, dev)
+# 7. Configurar webhook Evolution API (opcional, dev)
 ./scripts/setup-whatsapp.ps1
 ```
 
@@ -216,12 +246,7 @@ cd ../frontend && npm run dev
 ### Funcional mas incompleto
 - [ ] **professionalId no waitlist** — `waitlist.service.ts` usa `client.id` como `professionalId` ao criar agendamento via lista de espera (placeholder explícito no código, linha ~80 de `whatsapp.webhook.ts`)
 - [ ] **Reagendar via WhatsApp** — webhook cancela o agendamento mas não oferece horários; cliente precisa ligar ou acessar a plataforma
-- [ ] **Testes automatizados** — zero testes; risco alto para refatorações
-
-### UX / produto
-- [ ] **Registro de empresa** — não há página de cadastro no frontend (só existe o endpoint `/api/auth/register`); novo cliente precisa usar curl ou Postman para criar conta
-- [ ] **Gestão de usuários** — não há como adicionar recepcionista pelo painel; só profissionais (employee)
-- [ ] **Filtro de agendamentos por data** — tabela mostra todos; sem paginação
+- [ ] **Testes automatizados** — cobertura mínima; risco em refatorações
 
 ---
 
@@ -237,10 +262,10 @@ cd ../frontend && npm run dev
 
 ## PRÓXIMO PASSO REAL
 
-O backend está pronto. A prioridade agora é:
+O produto está completo e polido. A prioridade agora é:
 
-1. **Criar página de cadastro de empresa no frontend** (para onboarding sem curl)
-2. **Validar o produto com 1–3 clientes reais** (mesmo que em desenvolvimento)
-3. **Definir o nicho prioritário** (odontologia? barbearia? psicologia?) antes de iterar em features
+1. **Validar o produto com 1–3 clientes reais** (mesmo que em desenvolvimento local)
+2. **Definir o nicho prioritário** (odontologia? barbearia? psicologia?) antes de iterar em features
+3. **CORS + produção** — antes de colocar qualquer cliente real em servidor
 
 Só depois de validação partir para Fase 2 (PIX, analytics avançado, reputação).
