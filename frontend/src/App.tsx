@@ -9,12 +9,10 @@ import SettingsPage from './pages/app/SettingsPage'
 import AdminLoginPage from './pages/admin/AdminLoginPage'
 import AdminDashboardPage from './pages/admin/AdminDashboardPage'
 import AdminTenantsPage from './pages/admin/AdminTenantsPage'
-import { useAuth } from './hooks/useAuth'
-import { useAdminAuth } from './hooks/useAdminAuth'
 
 export default function App() {
-  const { token } = useAuth()
-  const { token: adminToken } = useAdminAuth()
+  const token = localStorage.getItem('noshow_token')
+  const adminToken = localStorage.getItem('noshow_admin_token')
 
   return (
     <Routes>
