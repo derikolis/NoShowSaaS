@@ -3,9 +3,9 @@ import {
   CalendarDays, Users, RefreshCw, TrendingUp,
   CalendarCheck, CalendarX, CalendarClock, UserX, AlertTriangle,
 } from 'lucide-react'
-import Layout from '../components/Layout'
-import { useAuth } from '../hooks/useAuth'
-import api from '../services/api'
+import Layout from '../../components/Layout'
+import { useAuth } from '../../hooks/useAuth'
+import api from '../../services/api'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

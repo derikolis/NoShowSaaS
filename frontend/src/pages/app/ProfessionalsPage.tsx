@@ -1,7 +1,7 @@
 import { useEffect, useState, FormEvent } from 'react'
 import { X, Mail, Calendar, UsersRound, Search, ShieldCheck, Pencil } from 'lucide-react'
-import Layout from '../components/Layout'
-import api from '../services/api'
+import Layout from '../../components/Layout'
+import api from '../../services/api'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

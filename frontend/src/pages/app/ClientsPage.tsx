@@ -1,8 +1,8 @@
 import { useEffect, useState, FormEvent } from 'react'
 import { X, Phone, Mail, ShieldCheck, ShieldOff, Star, Users, Search, Pencil } from 'lucide-react'
-import Layout from '../components/Layout'
-import { useAuth } from '../hooks/useAuth'
-import api from '../services/api'
+import Layout from '../../components/Layout'
+import { useAuth } from '../../hooks/useAuth'
+import api from '../../services/api'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

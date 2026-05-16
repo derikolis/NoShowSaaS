@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Smartphone, Server, MessageSquare, Clock, Link } from 'lucide-react'
-import Layout from '../components/Layout'
-import api from '../services/api'
+import Layout from '../../components/Layout'
+import api from '../../services/api'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
