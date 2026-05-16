@@ -7,6 +7,18 @@ import { ok, fail } from '../../shared/types/api'
 
 const router = Router()
 router.use(authMiddleware)
+
+// Qualquer usuário autenticado pode buscar o próprio perfil
+router.get('/me', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { id: req.user.sub },
+      select: { id: true, name: true, email: true, role: true },
+    })
+    res.json(ok(user))
+  } catch (err) { next(err) }
+})
+
 router.use(requireRole('owner'))
 
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
@@ -42,6 +54,44 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
       select: { id: true, name: true, email: true, role: true, createdAt: true },
     })
     res.status(201).json(ok(user, 'Usuário criado'))
+  } catch (err) { next(err) }
+})
+
+const updateSchema = z.object({
+  name:     z.string().min(2).optional(),
+  email:    z.string().email().optional(),
+  password: z.string().min(6).optional(),
+  role:     z.enum(['receptionist', 'employee']).optional(),
+})
+
+router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = String(req.params.id)
+    const body = updateSchema.parse(req.body)
+
+    const user = await prisma.user.findFirst({ where: { id, tenantId: req.tenantId } })
+    if (!user) { res.status(404).json(fail('Usuário não encontrado')); return }
+    if (user.role === 'owner') { res.status(400).json(fail('Não é possível editar o owner')); return }
+
+    if (body.email && body.email !== user.email) {
+      const conflict = await prisma.user.findUnique({
+        where: { tenantId_email: { tenantId: req.tenantId, email: body.email } },
+      })
+      if (conflict) { res.status(409).json(fail('Email já em uso')); return }
+    }
+
+    const data: Record<string, unknown> = {}
+    if (body.name)     data.name         = body.name
+    if (body.email)    data.email        = body.email
+    if (body.role)     data.role         = body.role
+    if (body.password) data.passwordHash = await hash(body.password, 10)
+
+    const updated = await prisma.user.update({
+      where: { id },
+      data,
+      select: { id: true, name: true, email: true, role: true, createdAt: true },
+    })
+    res.json(ok(updated, 'Usuário atualizado'))
   } catch (err) { next(err) }
 })
 

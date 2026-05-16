@@ -33,7 +33,7 @@ export async function login(email: string, password: string, tenantSlug: string)
   const valid = await bcrypt.compare(password, user.passwordHash)
   if (!valid) throw new Error('Credenciais inválidas')
 
-  const payload: JwtPayload = { sub: user.id, tenantId: tenant.id, role: user.role, email: user.email }
+  const payload: JwtPayload = { sub: user.id, tenantId: tenant.id, role: user.role, email: user.email, name: user.name }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const token = jwt.sign(payload, process.env.JWT_SECRET!, { expiresIn: (process.env.JWT_EXPIRES_IN ?? '7d') as any })
 
