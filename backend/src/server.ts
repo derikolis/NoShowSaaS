@@ -7,6 +7,12 @@ if (!process.env.JWT_SECRET) {
   process.exit(1)
 }
 
+const jwtExpiry = process.env.JWT_EXPIRES_IN ?? '7d'
+const numericOnly = /^\d+$/.test(jwtExpiry)
+if (numericOnly && parseInt(jwtExpiry) < 3600) {
+  console.warn(`AVISO: JWT_EXPIRES_IN="${jwtExpiry}" parece ser segundos (${jwtExpiry}s). Use "7d", "24h" etc. para valores maiores.`)
+}
+
 const PORT = process.env.PORT ?? 4000
 
 registerRecurringJobs().catch((err) => {
