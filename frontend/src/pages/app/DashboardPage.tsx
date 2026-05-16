@@ -1,13 +1,24 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import {
   CalendarDays, Users, RefreshCw, TrendingUp,
   CalendarCheck, CalendarX, CalendarClock, UserX, AlertTriangle,
+  CheckCircle2, XCircle, ArrowUp, ArrowDown, Clock,
 } from 'lucide-react'
 import Layout from '../../components/Layout'
 import { useAuth } from '../../hooks/useAuth'
 import api from '../../services/api'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+interface TodayAppointment {
+  id: string
+  service: string
+  scheduledAt: string
+  status: string
+  riskScore: number
+  client: { name: string; phone: string; riskScore: number }
+  professionalName: string
+}
 
 interface DashboardData {
   summary: { total: number; scheduled: number; confirmed: number; noShow: number; cancelled: number }
@@ -19,6 +30,12 @@ interface DashboardData {
     id: string; service: string; scheduledAt: string; status: string; riskScore: number
     client: { name: string; phone: string }
   }[]
+  todayAppointments: TodayAppointment[]
+  weekComparison: {
+    thisWeek: { total: number; noShow: number; rate: number | null }
+    lastWeek: { total: number; noShow: number; rate: number | null }
+  }
+  noShowsByDay: { day: number; count: number }[]
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -37,12 +54,11 @@ function todayLabel() {
 }
 
 function dayLabel(dateStr: string): string {
-  const date = new Date(dateStr)
-  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const date     = new Date(dateStr)
+  const today    = new Date(); today.setHours(0, 0, 0, 0)
   const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1)
-  const d = new Date(date); d.setHours(0, 0, 0, 0)
-
-  if (d.getTime() === today.getTime()) return 'Hoje'
+  const d        = new Date(date); d.setHours(0, 0, 0, 0)
+  if (d.getTime() === today.getTime())    return 'Hoje'
   if (d.getTime() === tomorrow.getTime()) return 'Amanhã'
   return date.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' })
 }
@@ -60,9 +76,18 @@ function groupByDay(items: DashboardData['upcoming']) {
   }))
 }
 
+const DAY_NAMES = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+
+const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
+  scheduled: { label: 'Agendado',   cls: 'bg-blue-100 text-blue-700'   },
+  confirmed: { label: 'Confirmado', cls: 'bg-green-100 text-green-700' },
+  no_show:   { label: 'No-show',    cls: 'bg-red-100 text-red-700'     },
+  cancelled: { label: 'Cancelado',  cls: 'bg-gray-100 text-gray-600'   },
+}
+
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
-function Skeleton({ className }: { className: string }) {
+function Sk({ className }: { className: string }) {
   return <div className={`animate-pulse bg-gray-200 rounded ${className}`} />
 }
 
@@ -70,66 +95,24 @@ function DashboardSkeleton() {
   return (
     <Layout>
       <div className="p-8 space-y-6">
-        <div className="space-y-2">
-          <Skeleton className="h-8 w-56" />
-          <Skeleton className="h-4 w-72" />
+        <div className="space-y-2"><Sk className="h-8 w-56" /><Sk className="h-4 w-72" /></div>
+        <Sk className="h-40 w-full rounded-xl" />
+        <div className="grid grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => <Sk key={i} className="h-28 rounded-xl" />)}
         </div>
         <div className="grid grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 space-y-3">
-              <div className="flex items-center justify-between">
-                <Skeleton className="h-3 w-24" />
-                <Skeleton className="h-8 w-8 rounded-lg" />
-              </div>
-              <Skeleton className="h-8 w-16" />
-              <Skeleton className="h-2 w-full" />
-              <Skeleton className="h-3 w-32" />
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center gap-4">
-              <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
-              <div className="space-y-2 flex-1">
-                <Skeleton className="h-6 w-12" />
-                <Skeleton className="h-3 w-20" />
-              </div>
-            </div>
-          ))}
+          {Array.from({ length: 4 }).map((_, i) => <Sk key={i} className="h-20 rounded-xl" />)}
         </div>
         <div className="grid grid-cols-3 gap-4">
-          <div className="col-span-2 bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-4">
-            <Skeleton className="h-5 w-32" />
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="flex gap-4 py-2">
-                <Skeleton className="h-4 flex-1" />
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-4 w-20" />
-                <Skeleton className="h-4 w-20" />
-              </div>
-            ))}
-          </div>
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-4">
-            <Skeleton className="h-5 w-40" />
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="flex gap-3 items-center py-1">
-                <Skeleton className="h-4 w-4" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-28" />
-                  <Skeleton className="h-2 w-full" />
-                </div>
-                <Skeleton className="h-4 w-6" />
-              </div>
-            ))}
-          </div>
+          <Sk className="h-48 rounded-xl" />
+          <Sk className="h-48 rounded-xl col-span-2" />
         </div>
       </div>
     </Layout>
   )
 }
 
-// ─── Small components ─────────────────────────────────────────────────────────
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
 function RiskBar({ score }: { score: number }) {
   const color = score <= 30 ? 'bg-green-500' : score <= 60 ? 'bg-yellow-400' : 'bg-red-500'
@@ -143,31 +126,41 @@ function RiskBar({ score }: { score: number }) {
   )
 }
 
-function KpiCard({
-  label, value, sub, icon: Icon, iconCls, valueCls,
-}: {
+function DeltaBadge({ now, prev }: { now: number; prev: number }) {
+  if (prev === 0) return null
+  const diff = now - prev
+  const up   = diff >= 0
+  return (
+    <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${up ? 'text-green-600' : 'text-red-500'}`}>
+      {up ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
+      {Math.abs(diff)}
+    </span>
+  )
+}
+
+function KpiCard({ label, value, sub, icon: Icon, iconCls, valueCls, delta }: {
   label: string; value: string | number; sub?: string
   icon: React.ElementType; iconCls: string; valueCls: string
+  delta?: React.ReactNode
 }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-col gap-3">
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{label}</span>
         <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${iconCls}`}>
           <Icon size={16} />
         </div>
       </div>
-      <div>
+      <div className="flex items-end gap-2">
         <div className={`text-3xl font-bold leading-none ${valueCls}`}>{value}</div>
-        {sub && <p className="text-xs text-gray-400 mt-1.5">{sub}</p>}
+        {delta}
       </div>
+      {sub && <p className="text-xs text-gray-400">{sub}</p>}
     </div>
   )
 }
 
-function StatusCard({
-  label, value, borderCls, valueCls, icon: Icon, iconCls,
-}: {
+function StatusCard({ label, value, borderCls, valueCls, icon: Icon, iconCls }: {
   label: string; value: number
   borderCls: string; valueCls: string
   icon: React.ElementType; iconCls: string
@@ -185,6 +178,127 @@ function StatusCard({
   )
 }
 
+function NoShowChart({ data }: { data: { day: number; count: number }[] }) {
+  const max = Math.max(...data.map(d => d.count), 1)
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+      <h2 className="text-sm font-semibold text-gray-800 mb-5">No-shows por dia da semana</h2>
+      <div className="flex items-end gap-2 h-28">
+        {data.map(({ day, count }) => (
+          <div key={day} className="flex-1 flex flex-col items-center gap-1">
+            <span className="text-xs text-gray-400 tabular-nums">{count > 0 ? count : ''}</span>
+            <div
+              className="w-full rounded-t-md bg-red-400 transition-all"
+              style={{ height: `${(count / max) * 80}px`, minHeight: count > 0 ? '4px' : '0' }}
+            />
+            <span className="text-[11px] text-gray-400 font-medium">{DAY_NAMES[day]}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function TodaySection({ appointments, onAction }: {
+  appointments: TodayAppointment[]
+  onAction: (id: string, action: 'confirm' | 'no-show') => Promise<void>
+}) {
+  const [loadingId, setLoadingId] = useState<string | null>(null)
+
+  const done     = appointments.filter(a => ['confirmed', 'no_show', 'cancelled'].includes(a.status)).length
+  const total    = appointments.length
+  const progress = total > 0 ? Math.round((done / total) * 100) : 0
+
+  async function handle(id: string, action: 'confirm' | 'no-show') {
+    setLoadingId(id)
+    try { await onAction(id, action) } finally { setLoadingId(null) }
+  }
+
+  if (total === 0) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 flex items-center gap-4">
+        <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center shrink-0">
+          <CalendarDays size={20} className="text-indigo-400" />
+        </div>
+        <div>
+          <p className="font-semibold text-gray-800">Nenhum agendamento hoje</p>
+          <p className="text-sm text-gray-400 mt-0.5">Aproveite para adiantar tarefas ou adicionar novos agendamentos.</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center">
+            <Clock size={18} className="text-indigo-500" />
+          </div>
+          <div>
+            <p className="font-semibold text-gray-900 text-sm">Agenda de hoje</p>
+            <p className="text-xs text-gray-400">{done} de {total} concluídos</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="w-32 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-full bg-indigo-500 rounded-full transition-all" style={{ width: `${progress}%` }} />
+          </div>
+          <span className="text-xs text-gray-400 tabular-nums w-8 text-right">{progress}%</span>
+        </div>
+      </div>
+
+      <div className="divide-y divide-gray-50">
+        {appointments.map(a => {
+          const cfg         = STATUS_CONFIG[a.status] ?? STATUS_CONFIG.scheduled
+          const isScheduled = a.status === 'scheduled'
+          const loading     = loadingId === a.id
+
+          return (
+            <div key={a.id} className="px-6 py-3.5 flex items-center gap-4 hover:bg-gray-50 transition-colors">
+              <div className="w-12 shrink-0 text-center">
+                <p className="text-sm font-bold text-gray-900 tabular-nums">
+                  {new Date(a.scheduledAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 truncate">{a.client.name}</p>
+                <p className="text-xs text-gray-400 truncate">{a.service} · {a.professionalName}</p>
+              </div>
+
+              <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium shrink-0 ${cfg.cls}`}>
+                {cfg.label}
+              </span>
+
+              {isScheduled && (
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => handle(a.id, 'confirm')}
+                    disabled={!!loading}
+                    title="Confirmar presença"
+                    className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors disabled:opacity-40"
+                  >
+                    <CheckCircle2 size={17} />
+                  </button>
+                  <button
+                    onClick={() => handle(a.id, 'no-show')}
+                    disabled={!!loading}
+                    title="Registrar no-show"
+                    className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40"
+                  >
+                    <XCircle size={17} />
+                  </button>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
@@ -192,27 +306,28 @@ export default function DashboardPage() {
   const [data,    setData]    = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
+  const load = useCallback(() => {
     api.get('/dashboard')
       .then(({ data: res }) => setData(res.data))
       .finally(() => setLoading(false))
   }, [])
 
-  if (loading) return <DashboardSkeleton />
-  if (!data) return null
+  useEffect(() => { load() }, [load])
 
-  const { summary, attendanceRate, recoveredSlots, totalClients, topNoShows, upcoming } = data
+  async function handleTodayAction(id: string, action: 'confirm' | 'no-show') {
+    await api.patch(`/appointments/${id}/${action}`)
+    load()
+  }
+
+  if (loading) return <DashboardSkeleton />
+  if (!data)   return null
+
+  const { summary, attendanceRate, recoveredSlots, totalClients, topNoShows, upcoming, todayAppointments, weekComparison, noShowsByDay } = data
+  const { thisWeek, lastWeek } = weekComparison
   const grouped = groupByDay(upcoming)
 
-  const attendanceColor = attendanceRate === null ? 'text-gray-400'
-    : attendanceRate >= 80 ? 'text-green-600'
-    : attendanceRate >= 60 ? 'text-yellow-600'
-    : 'text-red-600'
-
-  const attendanceBarColor = attendanceRate === null ? 'bg-gray-200'
-    : attendanceRate >= 80 ? 'bg-green-500'
-    : attendanceRate >= 60 ? 'bg-yellow-400'
-    : 'bg-red-500'
+  const attendanceColor    = attendanceRate === null ? 'text-gray-400' : attendanceRate >= 80 ? 'text-green-600' : attendanceRate >= 60 ? 'text-yellow-600' : 'text-red-600'
+  const attendanceBarColor = attendanceRate === null ? 'bg-gray-200'   : attendanceRate >= 80 ? 'bg-green-500'   : attendanceRate >= 60 ? 'bg-yellow-400'   : 'bg-red-500'
 
   return (
     <Layout>
@@ -226,54 +341,71 @@ export default function DashboardPage() {
           <p className="text-sm text-gray-400 mt-0.5 capitalize">{todayLabel()}</p>
         </div>
 
-        {/* Row 1 — KPIs */}
+        {/* Hoje */}
+        <TodaySection appointments={todayAppointments} onAction={handleTodayAction} />
+
+        {/* KPIs */}
         <div className="grid grid-cols-4 gap-4">
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-col gap-3">
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Comparecimento</span>
               <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-indigo-50 text-indigo-500">
                 <TrendingUp size={16} />
               </div>
             </div>
-            <div>
+            <div className="flex items-end gap-2">
               <div className={`text-3xl font-bold leading-none ${attendanceColor}`}>
                 {attendanceRate !== null ? `${attendanceRate}%` : '—'}
               </div>
-              <div className="mt-3 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                <div className={`h-full rounded-full transition-all ${attendanceBarColor}`} style={{ width: `${attendanceRate ?? 0}%` }} />
-              </div>
-              <p className="text-xs text-gray-400 mt-1.5">
-                {attendanceRate !== null ? 'taxa dos agendamentos' : 'sem dados suficientes'}
-              </p>
+              {thisWeek.rate !== null && lastWeek.rate !== null && (
+                <DeltaBadge now={thisWeek.rate} prev={lastWeek.rate} />
+              )}
             </div>
+            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div className={`h-full rounded-full ${attendanceBarColor}`} style={{ width: `${attendanceRate ?? 0}%` }} />
+            </div>
+            <p className="text-xs text-gray-400">
+              {attendanceRate !== null ? 'taxa geral de comparecimento' : 'sem dados suficientes'}
+            </p>
           </div>
 
-          <KpiCard label="Total de agendamentos" value={summary.total}
-            icon={CalendarDays} iconCls="bg-gray-100 text-gray-500" valueCls="text-gray-900" />
-          <KpiCard label="Clientes cadastrados" value={totalClients}
-            icon={Users} iconCls="bg-indigo-50 text-indigo-500" valueCls="text-indigo-600" />
-          <KpiCard label="Horários recuperados" value={recoveredSlots} sub="via lista de espera"
-            icon={RefreshCw} iconCls="bg-green-50 text-green-500" valueCls="text-green-600" />
+          <KpiCard
+            label="Agendamentos (semana)"
+            value={thisWeek.total}
+            icon={CalendarDays}
+            iconCls="bg-gray-100 text-gray-500"
+            valueCls="text-gray-900"
+            delta={<DeltaBadge now={thisWeek.total} prev={lastWeek.total} />}
+            sub="vs semana anterior"
+          />
+          <KpiCard
+            label="Clientes cadastrados"
+            value={totalClients}
+            icon={Users}
+            iconCls="bg-indigo-50 text-indigo-500"
+            valueCls="text-indigo-600"
+          />
+          <KpiCard
+            label="Horários recuperados"
+            value={recoveredSlots}
+            sub="via lista de espera"
+            icon={RefreshCw}
+            iconCls="bg-green-50 text-green-500"
+            valueCls="text-green-600"
+          />
         </div>
 
-        {/* Row 2 — Status */}
+        {/* Status */}
         <div className="grid grid-cols-4 gap-4">
-          <StatusCard label="Agendados" value={summary.scheduled}
-            borderCls="border-l-blue-400" valueCls="text-blue-600"
-            icon={CalendarClock} iconCls="bg-blue-50 text-blue-500" />
-          <StatusCard label="Confirmados" value={summary.confirmed}
-            borderCls="border-l-green-400" valueCls="text-green-600"
-            icon={CalendarCheck} iconCls="bg-green-50 text-green-500" />
-          <StatusCard label="No-show" value={summary.noShow}
-            borderCls="border-l-red-400" valueCls="text-red-600"
-            icon={UserX} iconCls="bg-red-50 text-red-500" />
-          <StatusCard label="Cancelados" value={summary.cancelled}
-            borderCls="border-l-gray-300" valueCls="text-gray-600"
-            icon={CalendarX} iconCls="bg-gray-100 text-gray-400" />
+          <StatusCard label="Agendados"   value={summary.scheduled} borderCls="border-l-blue-400"  valueCls="text-blue-600"  icon={CalendarClock} iconCls="bg-blue-50 text-blue-500"   />
+          <StatusCard label="Confirmados" value={summary.confirmed} borderCls="border-l-green-400" valueCls="text-green-600" icon={CalendarCheck}  iconCls="bg-green-50 text-green-500" />
+          <StatusCard label="No-show"     value={summary.noShow}    borderCls="border-l-red-400"   valueCls="text-red-600"   icon={UserX}          iconCls="bg-red-50 text-red-500"     />
+          <StatusCard label="Cancelados"  value={summary.cancelled} borderCls="border-l-gray-300"  valueCls="text-gray-600"  icon={CalendarX}      iconCls="bg-gray-100 text-gray-400"  />
         </div>
 
-        {/* Row 3 — Próximos + Top no-shows */}
+        {/* Gráfico + Próximos 7 dias */}
         <div className="grid grid-cols-3 gap-4">
+          <NoShowChart data={noShowsByDay} />
 
           <div className="col-span-2 bg-white rounded-xl border border-gray-100 shadow-sm">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
@@ -284,13 +416,11 @@ export default function DashboardPage() {
             </div>
 
             {upcoming.length === 0 ? (
-              <div className="px-6 py-12 text-center">
-                <div className="flex flex-col items-center gap-2">
-                  <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-                    <CalendarDays size={18} className="text-gray-300" />
-                  </div>
-                  <p className="text-sm text-gray-400">Nenhum agendamento nos próximos 7 dias</p>
+              <div className="flex flex-col items-center justify-center py-12 gap-2">
+                <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                  <CalendarDays size={18} className="text-gray-300" />
                 </div>
+                <p className="text-sm text-gray-400">Nenhum agendamento nos próximos 7 dias</p>
               </div>
             ) : (
               <table className="w-full text-sm">
@@ -306,8 +436,8 @@ export default function DashboardPage() {
                   {grouped.map(({ label, items }) => (
                     <>
                       <tr key={label}>
-                        <td colSpan={4} className="px-6 pt-4 pb-1.5">
-                          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 px-2 py-0.5 rounded-md capitalize">
+                        <td colSpan={4} className="px-6 pt-3 pb-1">
+                          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 px-2 py-0.5 rounded capitalize">
                             {label}
                           </span>
                         </td>
@@ -322,9 +452,7 @@ export default function DashboardPage() {
                           <td className="px-6 py-2.5 text-gray-600 tabular-nums">
                             {new Date(a.scheduledAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                           </td>
-                          <td className="px-6 py-2.5 w-32">
-                            <RiskBar score={a.riskScore} />
-                          </td>
+                          <td className="px-6 py-2.5 w-32"><RiskBar score={a.riskScore} /></td>
                         </tr>
                       ))}
                     </>
@@ -333,40 +461,30 @@ export default function DashboardPage() {
               </table>
             )}
           </div>
+        </div>
 
+        {/* Top no-shows */}
+        {topNoShows.length > 0 && (
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
               <AlertTriangle size={14} className="text-red-400" />
               <h2 className="font-semibold text-gray-800 text-sm">Clientes com mais faltas</h2>
             </div>
-            {topNoShows.length === 0 ? (
-              <div className="px-6 py-12 text-center">
-                <div className="flex flex-col items-center gap-2">
-                  <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-                    <UserX size={18} className="text-gray-300" />
+            <div className="divide-y divide-gray-50">
+              {topNoShows.map((c, i) => (
+                <div key={c.id} className="px-6 py-3.5 flex items-center gap-4">
+                  <span className="text-sm font-bold text-gray-300 w-4 shrink-0">{i + 1}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-900 text-sm truncate">{c.name}</p>
+                    <div className="mt-1.5"><RiskBar score={c.riskScore} /></div>
                   </div>
-                  <p className="text-sm text-gray-400">Nenhum no-show registrado</p>
+                  <span className="text-sm font-bold text-red-500 shrink-0 bg-red-50 px-2.5 py-0.5 rounded-full">{c.count}×</span>
                 </div>
-              </div>
-            ) : (
-              <ul className="divide-y divide-gray-50">
-                {topNoShows.map((c, i) => (
-                  <li key={c.id} className="px-6 py-3.5 flex items-center gap-3">
-                    <span className="text-sm font-bold text-gray-300 w-4 shrink-0">{i + 1}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 text-sm truncate">{c.name}</p>
-                      <div className="mt-1.5">
-                        <RiskBar score={c.riskScore} />
-                      </div>
-                    </div>
-                    <span className="text-sm font-bold text-red-500 shrink-0">{c.count}×</span>
-                  </li>
-                ))}
-              </ul>
-            )}
+              ))}
+            </div>
           </div>
+        )}
 
-        </div>
       </div>
     </Layout>
   )
