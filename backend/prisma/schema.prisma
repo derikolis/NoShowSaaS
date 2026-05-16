@@ -14,10 +14,13 @@ model Tenant {
   createdAt DateTime @default(now())
 
   // Configurações WhatsApp por tenant (sobrescrevem as variáveis de ambiente)
-  whatsappPhone     String? // número que os clientes verão como remetente
-  evolutionApiUrl   String?
-  evolutionApiKey   String?
-  evolutionInstance String?
+  whatsappPhone        String? // número que os clientes verão como remetente
+  evolutionApiUrl      String?
+  evolutionApiKey      String?
+  evolutionInstance    String?
+  reminderTemplate     String? // template do lembrete; placeholders: {nome} {hora} {profissional} {data}
+  confirmationTemplate String? // template da confirmação; placeholders: {nome} {hora} {data}
+  peakHours            Json?   // [{"start":12,"end":14},{"start":18,"end":20}]
 
   users        User[]
   clients      Client[]

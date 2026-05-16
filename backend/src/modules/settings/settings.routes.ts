@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express'
 import { z } from 'zod'
+import { Prisma } from '@prisma/client'
 import { authMiddleware, requireRole } from '../../shared/middlewares/auth.middleware'
 import { ok, fail } from '../../shared/types/api'
 import prisma from '../../shared/utils/prisma'
@@ -8,22 +9,57 @@ import { sendWhatsApp, getTenantWhatsAppConfig } from '../notifications/notifica
 const router = Router()
 router.use(authMiddleware)
 
-const updateSchema = z.object({
-  evolutionInstance: z.string().min(1).optional().nullable(),
+const peakHourRangeSchema = z.object({
+  start: z.number().int().min(0).max(23),
+  end:   z.number().int().min(1).max(24),
 })
+
+const updateSchema = z.object({
+  whatsappPhone:        z.string().optional().nullable(),
+  evolutionApiUrl:      z.string().url('URL inválida').optional().nullable(),
+  evolutionApiKey:      z.string().min(1).optional().nullable(),
+  evolutionInstance:    z.string().min(1).optional().nullable(),
+  reminderTemplate:     z.string().min(10, 'Template muito curto').optional().nullable(),
+  confirmationTemplate: z.string().min(10, 'Template muito curto').optional().nullable(),
+  peakHours:            z.array(peakHourRangeSchema).optional().nullable(),
+})
+
+function tenantFields(tenant: {
+  whatsappPhone: string | null
+  evolutionApiUrl: string | null
+  evolutionApiKey: string | null
+  evolutionInstance: string | null
+  reminderTemplate: string | null
+  confirmationTemplate: string | null
+  peakHours: unknown
+}) {
+  return {
+    whatsappPhone:        tenant.whatsappPhone,
+    evolutionApiUrl:      tenant.evolutionApiUrl,
+    evolutionApiKey:      tenant.evolutionApiKey,
+    evolutionInstance:    tenant.evolutionInstance,
+    reminderTemplate:     tenant.reminderTemplate,
+    confirmationTemplate: tenant.confirmationTemplate,
+    peakHours:            tenant.peakHours,
+  }
+}
 
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const tenant = await prisma.tenant.findUniqueOrThrow({ where: { id: req.tenantId } })
-    res.json(ok({ evolutionInstance: tenant.evolutionInstance }))
+    res.json(ok(tenantFields(tenant)))
   } catch (err) { next(err) }
 })
 
 router.put('/', requireRole('owner'), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const body = updateSchema.parse(req.body)
-    const tenant = await prisma.tenant.update({ where: { id: req.tenantId }, data: body })
-    res.json(ok({ evolutionInstance: tenant.evolutionInstance }, 'Configurações salvas'))
+    const { peakHours, ...rest } = updateSchema.parse(req.body)
+    const data: Prisma.TenantUpdateInput = {
+      ...rest,
+      ...(peakHours !== undefined && { peakHours: peakHours === null ? Prisma.DbNull : peakHours }),
+    }
+    const tenant = await prisma.tenant.update({ where: { id: req.tenantId }, data })
+    res.json(ok(tenantFields(tenant), 'Configurações salvas'))
   } catch (err) { next(err) }
 })
 

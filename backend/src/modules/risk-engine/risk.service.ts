@@ -11,9 +11,16 @@ const POINTS = {
   VIP: -20,
 } as const
 
-function isPeakHour(date: Date): boolean {
+type PeakHourRange = { start: number; end: number }
+
+const DEFAULT_PEAK_HOURS: PeakHourRange[] = [
+  { start: 12, end: 14 },
+  { start: 18, end: 20 },
+]
+
+function isPeakHour(date: Date, peakHours: PeakHourRange[] = DEFAULT_PEAK_HOURS): boolean {
   const hour = date.getHours()
-  return (hour >= 12 && hour < 14) || (hour >= 18 && hour < 20)
+  return peakHours.some(({ start, end }) => hour >= start && hour < end)
 }
 
 function isLastMinute(scheduledAt: Date): boolean {
@@ -30,8 +37,14 @@ export function classifyRisk(score: number): RiskLevel {
 }
 
 export async function calculateScore(tenantId: string, clientId: string, scheduledAt: Date): Promise<{ score: number; level: RiskLevel }> {
-  const client = await prisma.client.findFirst({ where: { id: clientId, tenantId } })
+  const [client, tenant] = await Promise.all([
+    prisma.client.findFirst({ where: { id: clientId, tenantId } }),
+    prisma.tenant.findUnique({ where: { id: tenantId }, select: { peakHours: true } }),
+  ])
+
   if (!client) throw new Error('Cliente não encontrado')
+
+  const peakHours = (tenant?.peakHours as PeakHourRange[] | null) ?? DEFAULT_PEAK_HOURS
 
   const history = await prisma.appointment.findMany({
     where: { clientId, tenantId, status: { in: ['no_show', 'confirmed'] } },
@@ -49,7 +62,7 @@ export async function calculateScore(tenantId: string, clientId: string, schedul
   const confirmedCount = history.filter(a => a.status === 'confirmed').length
   if (confirmedCount > 0) score += POINTS.CONFIRMED  // -30
 
-  if (isPeakHour(scheduledAt)) score += POINTS.PEAK_HOUR
+  if (isPeakHour(scheduledAt, peakHours)) score += POINTS.PEAK_HOUR
   if (isLastMinute(scheduledAt)) score += POINTS.LAST_MINUTE
   if (client.isVip) score += POINTS.VIP
 

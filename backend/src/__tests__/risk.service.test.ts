@@ -6,6 +6,7 @@ jest.mock('../shared/utils/prisma', () => ({
   default: {
     client: { findFirst: jest.fn() },
     appointment: { findMany: jest.fn() },
+    tenant: { findUnique: jest.fn() },
   },
 }))
 
@@ -49,13 +50,20 @@ function mockHistory(records: { status: string }[]) {
   ;(mockPrisma.appointment.findMany as jest.Mock).mockResolvedValue(records)
 }
 
+function mockTenant(peakHours: unknown = null) {
+  ;(mockPrisma.tenant.findUnique as jest.Mock).mockResolvedValue({ peakHours })
+}
+
 describe('calculateScore', () => {
   const tenantId = 'tenant-1'
   const clientId = 'client-1'
   // Horário fora do pico (10h) e mais de 2h no futuro
   const safeDate = new Date(Date.now() + 3 * 60 * 60 * 1000)
 
-  beforeEach(() => jest.clearAllMocks())
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockTenant() // peakHours: null → usa defaults (12–14h, 18–20h)
+  })
 
   it('cliente novo sem histórico recebe +15', async () => {
     mockClient()
@@ -122,5 +130,28 @@ describe('calculateScore', () => {
   it('lança erro se cliente não existir', async () => {
     ;(mockPrisma.client.findFirst as jest.Mock).mockResolvedValue(null)
     await expect(calculateScore(tenantId, clientId, safeDate)).rejects.toThrow('Cliente não encontrado')
+  })
+
+  it('usa horários de pico customizados do tenant', async () => {
+    mockTenant([{ start: 9, end: 11 }]) // pico das 9h às 11h
+    mockClient()
+    mockHistory([])
+    const customPeakDate = new Date()
+    customPeakDate.setHours(10, 0, 0, 0)
+    customPeakDate.setDate(customPeakDate.getDate() + 1)
+    const { score } = await calculateScore(tenantId, clientId, customPeakDate)
+    expect(score).toBe(15 + 20) // novo + pico customizado
+  })
+
+  it('ignora horário padrão de pico quando tenant tem config própria', async () => {
+    mockTenant([{ start: 9, end: 11 }]) // somente 9–11h é pico
+    mockClient()
+    mockHistory([])
+    // 12h–14h era pico no padrão mas não no custom
+    const standardPeakDate = new Date()
+    standardPeakDate.setHours(13, 0, 0, 0)
+    standardPeakDate.setDate(standardPeakDate.getDate() + 1)
+    const { score } = await calculateScore(tenantId, clientId, standardPeakDate)
+    expect(score).toBe(15) // só novo, sem pico
   })
 })

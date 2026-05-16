@@ -8,6 +8,27 @@ export type WhatsAppConfig = {
   instance: string
 }
 
+const DEFAULT_REMINDER_TEMPLATE =
+  'Olá {nome}.\nVocê tem um agendamento amanhã às {hora} com {profissional}.\nDeseja confirmar sua presença?'
+
+const DEFAULT_CONFIRMATION_TEMPLATE =
+  'Olá {nome}.\nSeu agendamento é hoje às {hora}.\nPrecisamos da sua confirmação!'
+
+function applyTemplate(template: string, vars: Record<string, string>): string {
+  return Object.entries(vars).reduce((t, [k, v]) => t.replaceAll(`{${k}}`, v), template)
+}
+
+export async function getTenantTemplates(tenantId: string) {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { reminderTemplate: true, confirmationTemplate: true },
+  })
+  return {
+    reminderTemplate: tenant?.reminderTemplate ?? DEFAULT_REMINDER_TEMPLATE,
+    confirmationTemplate: tenant?.confirmationTemplate ?? DEFAULT_CONFIRMATION_TEMPLATE,
+  }
+}
+
 async function addReminder(appointmentId: string, tenantId: string, type: string, delay: number) {
   await notificationQueue.add(type, { appointmentId, tenantId, type }, { delay })
   await prisma.notification.create({ data: { appointmentId, tenantId, type, channel: 'whatsapp', status: 'pending' } })
@@ -50,9 +71,9 @@ export async function getTenantWhatsAppConfig(tenantId: string): Promise<WhatsAp
     select: { evolutionApiUrl: true, evolutionApiKey: true, evolutionInstance: true },
   })
 
-  const apiUrl  = tenant?.evolutionApiUrl  ?? process.env.EVOLUTION_API_URL  ?? ''
-  const apiKey  = tenant?.evolutionApiKey  ?? process.env.EVOLUTION_API_KEY  ?? ''
-  const inst    = tenant?.evolutionInstance ?? process.env.EVOLUTION_INSTANCE ?? 'noshow'
+  const apiUrl = tenant?.evolutionApiUrl  ?? process.env.EVOLUTION_API_URL  ?? ''
+  const apiKey = tenant?.evolutionApiKey  ?? process.env.EVOLUTION_API_KEY  ?? ''
+  const inst   = tenant?.evolutionInstance ?? process.env.EVOLUTION_INSTANCE ?? 'noshow'
 
   if (!apiUrl || !apiKey) return null
   return { apiUrl, apiKey, instance: inst }
@@ -96,15 +117,29 @@ export async function sendWhatsAppButtons(
   await sendWhatsApp(phone, `${body}\n\n${opts}`, config)
 }
 
-export function buildReminderMessage(clientName: string, professionalName: string, scheduledAt: Date): string {
+export function buildReminderMessage(
+  clientName: string,
+  professionalName: string,
+  scheduledAt: Date,
+  template?: string | null,
+): string {
   const hora = scheduledAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-  return `Olá ${clientName}.\nVocê tem um agendamento amanhã às ${hora} com ${professionalName}.\nDeseja confirmar sua presença?`
+  const data = scheduledAt.toLocaleDateString('pt-BR')
+  const tpl = template ?? DEFAULT_REMINDER_TEMPLATE
+  return applyTemplate(tpl, { nome: clientName, hora, profissional: professionalName, data })
 }
 
-export function buildConfirmationMessage(clientName: string, scheduledAt: Date, urgent: boolean): string {
+export function buildConfirmationMessage(
+  clientName: string,
+  scheduledAt: Date,
+  urgent: boolean,
+  template?: string | null,
+): string {
   const hora = scheduledAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  const data = scheduledAt.toLocaleDateString('pt-BR')
   const prefix = urgent ? '⚠️ CONFIRMAÇÃO NECESSÁRIA\n' : ''
-  return `${prefix}Olá ${clientName}.\nSeu agendamento é hoje às ${hora}.\nPrecisamos da sua confirmação!`
+  const tpl = template ?? DEFAULT_CONFIRMATION_TEMPLATE
+  return `${prefix}${applyTemplate(tpl, { nome: clientName, hora, data })}`
 }
 
 export const APPOINTMENT_BUTTONS = [
