@@ -3,12 +3,12 @@ import api from '../services/api'
 
 const TOKEN_KEY = 'noshow_token'
 
-function decodePayload(token: string): { role: string; name: string } {
+function decodePayload(token: string): { role: string; name: string; slug: string } {
   try {
     const p = JSON.parse(atob(token.split('.')[1]))
-    return { role: p.role ?? '', name: p.name ?? '' }
+    return { role: p.role ?? '', name: p.name ?? '', slug: p.slug ?? '' }
   } catch {
-    return { role: '', name: '' }
+    return { role: '', name: '', slug: '' }
   }
 }
 
@@ -17,6 +17,7 @@ export function useAuth() {
   const [name, setName] = useState(() => token ? decodePayload(token).name : '')
 
   const role = token ? decodePayload(token).role : ''
+  const slug = token ? decodePayload(token).slug : ''
 
   // Se o token não tiver o nome (token antigo), busca do servidor
   useEffect(() => {
@@ -39,5 +40,5 @@ export function useAuth() {
     setName('')
   }
 
-  return { token, role, name, login, logout }
+  return { token, role, name, slug, login, logout }
 }
