@@ -9,6 +9,7 @@ import waitlistRoutes from './modules/waitlist/waitlist.routes'
 import professionalsRoutes from './modules/professionals/professionals.routes'
 import settingsRoutes from './modules/settings/settings.routes'
 import usersRoutes from './modules/users/users.routes'
+import adminRoutes from './modules/admin/admin.routes'
 import whatsappWebhook from './webhooks/whatsapp.webhook'
 import { errorMiddleware } from './shared/middlewares/error.middleware'
 
@@ -31,6 +32,7 @@ app.use('/api/waitlist', waitlistRoutes)
 app.use('/api/professionals', professionalsRoutes)
 app.use('/api/settings', settingsRoutes)
 app.use('/api/users', usersRoutes)
+app.use('/api/admin', adminRoutes)
 app.use('/webhooks', whatsappWebhook)
 
 app.use(errorMiddleware)

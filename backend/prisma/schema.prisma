@@ -11,6 +11,7 @@ model Tenant {
   name      String
   slug      String   @unique
   plan      String   @default("basic")
+  status    String   @default("active") // active | inactive | blocked
   createdAt DateTime @default(now())
 
   // Configurações WhatsApp por tenant (sobrescrevem as variáveis de ambiente)

@@ -26,6 +26,7 @@ export async function registerTenant(name: string, slug: string, ownerName: stri
 export async function login(email: string, password: string, tenantSlug: string) {
   const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } })
   if (!tenant) throw new Error('Empresa não encontrada')
+  if (tenant.status === 'blocked') throw new Error('Empresa bloqueada')
 
   const user = await prisma.user.findUnique({ where: { tenantId_email: { tenantId: tenant.id, email } } })
   if (!user) throw new Error('Credenciais inválidas')
