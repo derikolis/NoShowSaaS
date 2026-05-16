@@ -47,12 +47,12 @@ router.put('/:id', requireRole('owner'), async (req: Request, res: Response, nex
     }).parse(req.body)
 
     const existing = await prisma.service.findFirst({
-      where: { id: req.params.id, tenantId: req.tenantId },
+      where: { id: (req.params.id as string), tenantId: req.tenantId },
     })
     if (!existing) { res.status(404).json(fail('Serviço não encontrado')); return }
 
     const service = await prisma.service.update({
-      where: { id: req.params.id },
+      where: { id: (req.params.id as string) },
       data: body,
     })
     res.json(ok(service, 'Serviço atualizado'))

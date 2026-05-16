@@ -15,6 +15,7 @@ export async function adminLogin(email: string, password: string) {
   const payload: JwtPayload = {
     sub: 'superadmin',
     tenantId: '',
+    slug: '',
     role: 'superadmin',
     email,
     name: 'Super Admin',

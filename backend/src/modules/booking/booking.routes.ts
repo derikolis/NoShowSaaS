@@ -23,7 +23,7 @@ function signClientToken(client: { id: string; name: string; phone: string }, te
 router.get('/:slug', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const tenant = await prisma.tenant.findUnique({
-      where: { slug: req.params.slug },
+      where: { slug: (req.params.slug as string) },
       select: { id: true, name: true, status: true },
     })
     if (!tenant || tenant.status === 'blocked') {
@@ -56,7 +56,7 @@ router.get('/:slug/slots', async (req: Request, res: Response, next: NextFunctio
     }
 
     const tenant = await prisma.tenant.findUnique({
-      where: { slug: req.params.slug },
+      where: { slug: (req.params.slug as string) },
       select: { id: true, status: true },
     })
     if (!tenant || tenant.status === 'blocked') {
@@ -103,7 +103,7 @@ router.get('/:slug/client', async (req: Request, res: Response, next: NextFuncti
     if (!phone) { res.status(400).json(fail('Telefone obrigatório')); return }
 
     const tenant = await prisma.tenant.findUnique({
-      where: { slug: req.params.slug },
+      where: { slug: (req.params.slug as string) },
       select: { id: true, status: true },
     })
     if (!tenant || tenant.status === 'blocked') {
@@ -142,7 +142,7 @@ router.post('/:slug/register', async (req: Request, res: Response, next: NextFun
     }
 
     const tenant = await prisma.tenant.findUnique({
-      where: { slug: req.params.slug },
+      where: { slug: (req.params.slug as string) },
       select: { id: true, status: true },
     })
     if (!tenant || tenant.status !== 'active') {
@@ -194,7 +194,7 @@ router.post('/:slug/login', async (req: Request, res: Response, next: NextFuncti
     }).parse(req.body)
 
     const tenant = await prisma.tenant.findUnique({
-      where: { slug: req.params.slug },
+      where: { slug: (req.params.slug as string) },
       select: { id: true, status: true },
     })
     if (!tenant || tenant.status !== 'active') {
@@ -241,7 +241,7 @@ router.post('/:slug', async (req: Request, res: Response, next: NextFunction) =>
     }
 
     const tenant = await prisma.tenant.findUnique({
-      where: { slug: req.params.slug },
+      where: { slug: (req.params.slug as string) },
       select: { id: true, status: true },
     })
     if (!tenant || tenant.status !== 'active') {

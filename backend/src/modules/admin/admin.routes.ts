@@ -80,7 +80,7 @@ router.post('/tenants', async (req: Request, res: Response, next: NextFunction) 
 router.patch('/tenants/:id/status', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { status } = statusSchema.parse(req.body)
-    await adminService.updateTenantStatus(req.params.id, status)
+    await adminService.updateTenantStatus(req.params.id as string, status)
     res.json(ok(null, 'Status atualizado'))
   } catch (err) {
     if (err instanceof Error && err.message === 'Empresa não encontrada') {
