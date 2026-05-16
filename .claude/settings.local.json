@@ -20,7 +20,10 @@
       "Bash(npx tsc *)",
       "Bash(npx jest *)",
       "Bash(npm test *)",
-      "Bash(npx vite *)"
+      "Bash(npx vite *)",
+      "WebSearch",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }
