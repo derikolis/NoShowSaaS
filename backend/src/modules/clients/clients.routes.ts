@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express'
 import { z } from 'zod'
 import { authMiddleware, requireRole } from '../../shared/middlewares/auth.middleware'
-import { listClients, getClient, createClient, updateClient, deleteClient } from './clients.service'
+import { listClients, getClient, getClientHistory, createClient, updateClient, deleteClient } from './clients.service'
 import { ok, fail } from '../../shared/types/api'
 
 const router = Router()
@@ -33,6 +33,18 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const client = await getClient(req.tenantId, String(req.params.id))
     res.json(ok(client))
+  } catch (err) {
+    if (err instanceof Error && err.message === 'Cliente não encontrado') {
+      res.status(404).json(fail(err.message)); return
+    }
+    next(err)
+  }
+})
+
+router.get('/:id/history', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const history = await getClientHistory(req.tenantId, String(req.params.id))
+    res.json(ok(history))
   } catch (err) {
     if (err instanceof Error && err.message === 'Cliente não encontrado') {
       res.status(404).json(fail(err.message)); return
