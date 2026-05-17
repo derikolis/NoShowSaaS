@@ -3,13 +3,22 @@ import { Plus, Search, Building2, CheckCircle2, XCircle, ShieldOff, X, Trash2, A
 import AdminLayout from './AdminLayout'
 import adminApi from '../../services/adminApi'
 
+type Plan = 'basic' | 'pro' | 'enterprise'
+
 interface Tenant {
   id: string
   name: string
   slug: string
+  plan: Plan
   status: 'active' | 'inactive' | 'blocked'
   ownerEmail: string
   createdAt: string
+}
+
+const PLAN_CONFIG: Record<Plan, { label: string; cls: string }> = {
+  basic:      { label: 'Basic',      cls: 'bg-slate-800 text-slate-300 border-slate-700'     },
+  pro:        { label: 'Pro',        cls: 'bg-indigo-900/50 text-indigo-300 border-indigo-700' },
+  enterprise: { label: 'Enterprise', cls: 'bg-yellow-900/40 text-yellow-300 border-yellow-700' },
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -61,8 +70,9 @@ export default function AdminTenantsPage() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [saving,     setSaving]     = useState(false)
-  const [deleteTarget, setDeleteTarget] = useState<Tenant | null>(null)
-  const [deleting,     setDeleting]     = useState(false)
+  const [deleteTarget,  setDeleteTarget]  = useState<Tenant | null>(null)
+  const [deleting,      setDeleting]      = useState(false)
+  const [changingPlan,  setChangingPlan]  = useState<string | null>(null)
 
   // form state
   const [form, setForm] = useState({
@@ -100,6 +110,19 @@ export default function AdminTenantsPage() {
       showToast('Erro ao criar empresa', 'error')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handlePlanChange(id: string, plan: Plan) {
+    setChangingPlan(id)
+    try {
+      await adminApi.patch(`/admin/tenants/${id}/plan`, { plan })
+      showToast(`Plano alterado para ${PLAN_CONFIG[plan].label}`, 'success')
+      setTenants(prev => prev.map(t => t.id === id ? { ...t, plan } : t))
+    } catch {
+      showToast('Erro ao alterar plano', 'error')
+    } finally {
+      setChangingPlan(null)
     }
   }
 
@@ -184,6 +207,7 @@ export default function AdminTenantsPage() {
                 <th className="text-left px-6 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Empresa</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Slug</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Email do dono</th>
+                <th className="text-left px-6 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Plano</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Cadastrada em</th>
                 <th className="px-6 py-3" />
@@ -191,10 +215,10 @@ export default function AdminTenantsPage() {
             </thead>
             <tbody className="divide-y divide-slate-800">
               {loading ? (
-                <tr><td colSpan={6}><TableSkeleton /></td></tr>
+                <tr><td colSpan={7}><TableSkeleton /></td></tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6}>
+                  <td colSpan={7}>
                     <div className="flex flex-col items-center justify-center py-16 text-slate-500">
                       <Building2 size={36} className="mb-3 opacity-40" />
                       <p className="text-sm">{search ? 'Nenhuma empresa encontrada' : 'Nenhuma empresa cadastrada ainda'}</p>
@@ -206,6 +230,22 @@ export default function AdminTenantsPage() {
                   <td className="px-6 py-4 font-medium text-white">{t.name}</td>
                   <td className="px-6 py-4 text-slate-400 font-mono text-xs">{t.slug}</td>
                   <td className="px-6 py-4 text-slate-400">{t.ownerEmail}</td>
+                  <td className="px-6 py-4">
+                    <div className="relative">
+                      <select
+                        value={t.plan}
+                        disabled={changingPlan === t.id}
+                        onChange={e => handlePlanChange(t.id, e.target.value as Plan)}
+                        className={`appearance-none text-xs font-semibold px-2.5 py-1 rounded-full border cursor-pointer
+                          focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-wait
+                          ${PLAN_CONFIG[t.plan]?.cls ?? PLAN_CONFIG.basic.cls}`}
+                      >
+                        <option value="basic">Basic</option>
+                        <option value="pro">Pro</option>
+                        <option value="enterprise">Enterprise</option>
+                      </select>
+                    </div>
+                  </td>
                   <td className="px-6 py-4">
                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_CLASS[t.status] ?? STATUS_CLASS.inactive}`}>
                       {STATUS_LABEL[t.status] ?? t.status}

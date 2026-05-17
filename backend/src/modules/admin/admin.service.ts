@@ -98,6 +98,12 @@ export async function updateTenantStatus(id: string, status: string) {
   await prisma.tenant.update({ where: { id }, data: { status } })
 }
 
+export async function updateTenantPlan(id: string, plan: string) {
+  const tenant = await prisma.tenant.findUnique({ where: { id } })
+  if (!tenant) throw new Error('Empresa não encontrada')
+  await prisma.tenant.update({ where: { id }, data: { plan } })
+}
+
 export async function deleteTenant(id: string) {
   const tenant = await prisma.tenant.findUnique({ where: { id } })
   if (!tenant) throw new Error('Empresa não encontrada')

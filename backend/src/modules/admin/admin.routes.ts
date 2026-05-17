@@ -26,6 +26,10 @@ const statusSchema = z.object({
   status: z.enum(['active', 'inactive', 'blocked']),
 })
 
+const planSchema = z.object({
+  plan: z.enum(['basic', 'pro', 'enterprise']),
+})
+
 // POST /api/admin/auth/login — público
 router.post('/auth/login', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -114,6 +118,21 @@ router.patch('/tenants/:id/status', async (req: Request, res: Response, next: Ne
     const { status } = statusSchema.parse(req.body)
     await adminService.updateTenantStatus(req.params.id as string, status)
     res.json(ok(null, 'Status atualizado'))
+  } catch (err) {
+    if (err instanceof Error && err.message === 'Empresa não encontrada') {
+      res.status(404).json(fail(err.message))
+      return
+    }
+    next(err)
+  }
+})
+
+// PATCH /api/admin/tenants/:id/plan
+router.patch('/tenants/:id/plan', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { plan } = planSchema.parse(req.body)
+    await adminService.updateTenantPlan(req.params.id as string, plan)
+    res.json(ok(null, 'Plano atualizado'))
   } catch (err) {
     if (err instanceof Error && err.message === 'Empresa não encontrada') {
       res.status(404).json(fail(err.message))
