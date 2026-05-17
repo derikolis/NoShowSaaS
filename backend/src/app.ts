@@ -1,5 +1,6 @@
 import express from 'express'
 import cors from 'cors'
+import rateLimit from 'express-rate-limit'
 import 'dotenv/config'
 import dashboardRoutes from './modules/dashboard/dashboard.routes'
 import authRoutes from './modules/auth/auth.routes'
@@ -31,6 +32,38 @@ app.use(cors({
 }))
 
 app.use(express.json({ limit: '5mb' }))
+
+// ─── Rate limiting ────────────────────────────────────────────────────────────
+
+const generalLimit = rateLimit({
+  windowMs: 60 * 1000,        // 1 minuto
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Muitas requisições. Tente novamente em breve.' },
+})
+
+const authLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,  // 15 minutos
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Muitas tentativas de login. Aguarde 15 minutos.' },
+})
+
+const webhookLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+app.use('/api/auth', authLimit)
+app.use('/api/booking/:slug/login', authLimit)
+app.use('/api/booking/:slug/register', authLimit)
+app.use('/api/payments/webhook', webhookLimit)
+app.use('/webhooks', webhookLimit)
+app.use('/api', generalLimit)
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }))
 
