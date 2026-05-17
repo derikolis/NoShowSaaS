@@ -1,5 +1,5 @@
 import { useEffect, useState, FormEvent } from 'react'
-import { Plus, Search, Building2, CheckCircle2, XCircle, ShieldOff, X } from 'lucide-react'
+import { Plus, Search, Building2, CheckCircle2, XCircle, ShieldOff, X, Trash2, AlertTriangle } from 'lucide-react'
 import AdminLayout from './AdminLayout'
 import adminApi from '../../services/adminApi'
 
@@ -60,7 +60,9 @@ export default function AdminTenantsPage() {
   const [search, setSearch] = useState('')
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [saving, setSaving] = useState(false)
+  const [saving,     setSaving]     = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<Tenant | null>(null)
+  const [deleting,     setDeleting]     = useState(false)
 
   // form state
   const [form, setForm] = useState({
@@ -98,6 +100,21 @@ export default function AdminTenantsPage() {
       showToast('Erro ao criar empresa', 'error')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await adminApi.delete(`/admin/tenants/${deleteTarget.id}`)
+      showToast('Empresa excluída com sucesso', 'success')
+      setDeleteTarget(null)
+      loadTenants()
+    } catch {
+      showToast('Erro ao excluir empresa', 'error')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -198,7 +215,7 @@ export default function AdminTenantsPage() {
                     {new Date(t.createdAt).toLocaleDateString('pt-BR')}
                   </td>
                   <td className="px-6 py-4">
-                    <div className="flex items-center gap-2 justify-end">
+                    <div className="flex items-center gap-1 justify-end">
                       {t.status !== 'active' && (
                         <button
                           onClick={() => handleStatusChange(t.id, 'active')}
@@ -217,6 +234,13 @@ export default function AdminTenantsPage() {
                           <ShieldOff size={16} />
                         </button>
                       )}
+                      <button
+                        onClick={() => setDeleteTarget(t)}
+                        title="Excluir empresa"
+                        className="p-1.5 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-900/30 transition-colors"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -318,6 +342,52 @@ export default function AdminTenantsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </>
+      )}
+
+      {/* ── Modal de exclusão ──────────────────────────────────────────────── */}
+      {deleteTarget && (
+        <>
+          <div className="fixed inset-0 bg-black/70 z-50" onClick={() => !deleting && setDeleteTarget(null)} />
+          <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-md p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-red-900/40 border border-red-800 flex items-center justify-center shrink-0">
+                  <AlertTriangle size={18} className="text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-white">Excluir empresa</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Esta ação não pode ser desfeita</p>
+                </div>
+              </div>
+
+              <div className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 mb-5">
+                <p className="text-sm font-semibold text-white">{deleteTarget.name}</p>
+                <p className="text-xs text-slate-400 mt-0.5">/{deleteTarget.slug} · {deleteTarget.ownerEmail}</p>
+              </div>
+
+              <p className="text-sm text-slate-300 mb-6">
+                Todos os dados serão apagados permanentemente: agendamentos, clientes, notificações, pagamentos e usuários desta empresa.
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setDeleteTarget(null)}
+                  disabled={deleting}
+                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 text-sm font-semibold rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="flex-1 py-2.5 bg-red-700 hover:bg-red-600 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors"
+                >
+                  {deleting ? 'Excluindo...' : 'Sim, excluir'}
+                </button>
+              </div>
+            </div>
           </div>
         </>
       )}

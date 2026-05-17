@@ -123,4 +123,18 @@ router.patch('/tenants/:id/status', async (req: Request, res: Response, next: Ne
   }
 })
 
+// DELETE /api/admin/tenants/:id
+router.delete('/tenants/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await adminService.deleteTenant(req.params.id as string)
+    res.json(ok(null, 'Empresa excluída'))
+  } catch (err) {
+    if (err instanceof Error && err.message === 'Empresa não encontrada') {
+      res.status(404).json(fail(err.message))
+      return
+    }
+    next(err)
+  }
+})
+
 export default router

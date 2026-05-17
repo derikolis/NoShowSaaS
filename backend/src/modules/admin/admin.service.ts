@@ -98,6 +98,22 @@ export async function updateTenantStatus(id: string, status: string) {
   await prisma.tenant.update({ where: { id }, data: { status } })
 }
 
+export async function deleteTenant(id: string) {
+  const tenant = await prisma.tenant.findUnique({ where: { id } })
+  if (!tenant) throw new Error('Empresa não encontrada')
+
+  // Deleta na ordem correta para respeitar foreign keys
+  await prisma.notification.deleteMany({ where: { tenantId: id } })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (prisma as any).payment.deleteMany({ where: { tenantId: id } })
+  await prisma.waitlist.deleteMany({ where: { tenantId: id } })
+  await prisma.appointment.deleteMany({ where: { tenantId: id } })
+  await prisma.client.deleteMany({ where: { tenantId: id } })
+  await prisma.user.deleteMany({ where: { tenantId: id } })
+  await prisma.service.deleteMany({ where: { tenantId: id } })
+  await prisma.tenant.delete({ where: { id } })
+}
+
 export async function getTenantHealth() {
   const now = new Date()
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
