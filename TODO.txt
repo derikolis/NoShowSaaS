@@ -1,0 +1,225 @@
+====================================================
+NO-SHOW SAAS — O QUE FALTA FAZER
+====================================================
+Última atualização: 2026-05-17
+
+
+====================================================
+BANCO DE DADOS — MIGRATIONS PENDENTES
+====================================================
+
+Atenção: as tabelas abaixo foram adicionadas ao schema.prisma
+mas ainda NÃO têm migration SQL criada no Render.
+
+1. Tabela PasswordReset
+   - Criada em: backend/prisma/schema.prisma
+   - Falta criar manualmente no banco do Render:
+
+   CREATE TABLE IF NOT EXISTS "PasswordReset" (
+     id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+     "clientId"  TEXT NOT NULL,
+     "tenantId"  TEXT NOT NULL,
+     token       TEXT NOT NULL UNIQUE,
+     method      TEXT NOT NULL,
+     "expiresAt" TIMESTAMP NOT NULL,
+     "usedAt"    TIMESTAMP,
+     "createdAt" TIMESTAMP NOT NULL DEFAULT now()
+   );
+
+   Arquivo: backend/prisma/migrations/20260517000005_password_reset/migration.sql
+   (criar esse arquivo e rodar o SQL no banco)
+
+
+====================================================
+WHATSAPP — INTEGRAÇÃO REAL
+====================================================
+
+Hoje o sistema tem sendWhatsApp() mas provavelmente
+está simulando (só loga no console).
+
+O que falta:
+- Decidir provedor: Twilio, Z-API, Evolution API, ou WPPConnect
+- Configurar credenciais no .env do Render
+- Testar envio real de:
+  - Lembrete 24h antes do agendamento (BullMQ job já existe)
+  - Lembrete 2h antes
+  - Código de reset de senha
+  - Confirmação de agendamento
+
+Arquivo: backend/src/modules/notifications/notification.service.ts
+         backend/src/jobs/notification.worker.ts
+
+
+====================================================
+CONFIRMAÇÃO DE AGENDAMENTO
+====================================================
+
+O sistema ainda não tem fluxo de confirmação por parte do cliente.
+
+O que falta:
+- Rota pública: GET /api/booking/:slug/confirm/:token
+  (cliente clica no link do WhatsApp e confirma)
+- Mudar status do appointment de 'scheduled' para 'confirmed'
+- Enviar mensagem de confirmação de volta
+- Webhook de resposta do WhatsApp (se usar botões)
+
+
+====================================================
+SCORE DE RISCO — ENGINE DE REGRAS
+====================================================
+
+O campo riskScore existe no banco mas não é atualizado.
+
+O que falta:
+- Atualizar riskScore do cliente quando:
+  - Faltou (no_show): +30 pontos
+  - Compareceu (completed): -20 pontos
+  - Cancelou com antecedência: 0 (neutro)
+  - Cancelou em cima da hora: +10 pontos
+  - Cliente novo: começa com 15 (já feito no register)
+- Usar riskScore na lógica de agendamento:
+  - Alto risco (>60): exigir depósito ou bloquear horário premium
+  - Médio risco (31-60): confirmação obrigatória
+
+
+====================================================
+LISTA DE ESPERA — NOTIFICAÇÃO AUTOMÁTICA
+====================================================
+
+O módulo de waitlist existe mas provavelmente não está
+disparando quando uma vaga abre.
+
+O que falta:
+- Quando appointment é cancelado:
+  - Buscar próximos clientes na lista de espera
+  - Enviar WhatsApp avisando que a vaga abriu
+  - Primeiro que responder recebe a vaga
+- Rota pública para aceitar a vaga via link
+
+Arquivo: backend/src/modules/waitlist/
+
+
+====================================================
+DASHBOARD — MÉTRICAS
+====================================================
+
+O dashboard provavelmente mostra dados básicos.
+Falta verificar se estas métricas estão corretas:
+
+- Taxa de no-show por período
+- Receita perdida (no-shows × preço médio)
+- Receita recuperada (via lista de espera)
+- Taxa de ocupação por profissional
+- Horários mais críticos (maior índice de falta)
+- Clientes reincidentes
+
+Arquivo: backend/src/modules/dashboard/dashboard.routes.ts
+
+
+====================================================
+SISTEMA DE REPUTAÇÃO DO CLIENTE
+====================================================
+
+Falta uma tela na área administrativa mostrando:
+- Score de risco de cada cliente
+- Histórico de faltas
+- Ações: bloquear cliente, zerar score, etc.
+
+Arquivo: frontend/src/pages/app/ClientsPage.tsx
+         (adicionar coluna de score na listagem)
+
+
+====================================================
+LEMBRETES AUTOMÁTICOS — CONFIGURAÇÃO POR TENANT
+====================================================
+
+Hoje os lembretes são enviados mas não há configuração
+por empresa (quantas horas antes, qual texto).
+
+O que falta:
+- Adicionar campos na Settings:
+  - reminder1Hours (padrão: 24h)
+  - reminder2Hours (padrão: 2h)
+  - reminderEnabled (toggle)
+- Usar esses campos no worker de notificação
+
+
+====================================================
+VARIÁVEIS DE AMBIENTE — RENDER
+====================================================
+
+Confirmar que estas envs estão configuradas no Render:
+
+Backend:
+  DATABASE_URL        ✅ (necessário para Prisma)
+  JWT_SECRET          ✅
+  FRONTEND_URL        ✅ (kired.com.br)
+  ADMIN_EMAIL         ✅ (superadmin)
+  ADMIN_PASSWORD_HASH ✅
+  REDIS_URL           ? (necessário para BullMQ/filas)
+  SMTP_HOST           ? (para envio de e-mail de reset)
+  SMTP_PORT           ?
+  SMTP_USER           ?
+  SMTP_PASS           ?
+  SMTP_FROM           ?
+
+Se REDIS_URL não estiver configurado, os jobs de lembrete
+(BullMQ) não vão funcionar em produção.
+
+
+====================================================
+PAGAMENTOS PIX — TESTAR EM PRODUÇÃO
+====================================================
+
+A integração com Mercado Pago, Stripe e AbacatePay
+foi implementada mas precisa de teste real:
+
+- Configurar uma conta de teste no Mercado Pago (sandbox)
+- Configurar webhook no painel do Mercado Pago apontando para:
+  POST https://noshowsaas.onrender.com/api/payments/webhook/mercadopago
+- Testar fluxo completo: agendamento → PIX gerado → pagamento → webhook recebido
+
+
+====================================================
+SEGURANÇA — PONTOS MENORES
+====================================================
+
+- [ ] Limitar tamanho do upload de foto de profissional
+- [ ] Validar formato do telefone (apenas dígitos)
+- [ ] LGPD: rota para o cliente solicitar exclusão de dados
+      GET/DELETE /api/booking/:slug/my/account
+
+
+====================================================
+FUNCIONALIDADES FUTURAS (FASE 2)
+====================================================
+
+- Analytics avançado com gráficos (Recharts ou similar)
+- Integração com Google Calendar
+- Campanha de recuperação de clientes inativos
+- Sistema de planos (Basic, Pro, Enterprise)
+- Cobrança de assinatura dos tenants (billing)
+- App mobile (React Native ou PWA)
+- White-label (domínio próprio por tenant)
+
+
+====================================================
+RESUMO — PRIORIDADE PARA LANÇAMENTO
+====================================================
+
+CRÍTICO (sem isso não funciona em prod):
+  1. Migration SQL da tabela PasswordReset
+  2. Configurar REDIS_URL no Render (BullMQ)
+  3. Testar WhatsApp em produção
+
+IMPORTANTE (core do produto):
+  4. Confirmação de agendamento via link
+  5. Atualizar riskScore após no-show/comparecimento
+  6. Notificação da lista de espera ao cancelar
+
+MELHORIA (agrega valor):
+  7. Dashboard com métricas reais
+  8. Reputação do cliente visível na tela de clientes
+  9. Configuração de lembretes por tenant
+
+====================================================

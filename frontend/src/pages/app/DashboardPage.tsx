@@ -437,7 +437,7 @@ export default function DashboardPage() {
                     <>
                       <tr key={label}>
                         <td colSpan={4} className="px-6 pt-3 pb-1">
-                          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 px-2 py-0.5 rounded capitalize">
+                          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 px-2 py-0.5 rounded">
                             {label}
                           </span>
                         </td>
