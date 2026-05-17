@@ -1,7 +1,10 @@
 import { Router, Request, Response, NextFunction } from 'express'
 import { z } from 'zod'
+import jwt from 'jsonwebtoken'
 import { ok, fail } from '../../shared/types/api'
 import { adminMiddleware } from '../../shared/middlewares/admin.middleware'
+import { setAuthCookie, clearAuthCookie } from '../../shared/utils/cookie'
+import { JwtPayload } from '../../shared/types/jwt'
 import * as adminService from './admin.service'
 
 const router = Router()
@@ -28,13 +31,34 @@ router.post('/auth/login', async (req: Request, res: Response, next: NextFunctio
   try {
     const { email, password } = loginSchema.parse(req.body)
     const result = await adminService.adminLogin(email, password)
-    res.json(ok(result, 'Login realizado com sucesso'))
+    setAuthCookie(res, 'noshow_admin', result.token)
+    res.json(ok({ name: 'Super Admin', role: 'superadmin' }, 'Login realizado com sucesso'))
   } catch (err) {
     if (err instanceof Error && err.message === 'Credenciais inválidas') {
       res.status(401).json(fail(err.message))
       return
     }
     next(err)
+  }
+})
+
+// POST /api/admin/auth/logout
+router.post('/auth/logout', (req: Request, res: Response) => {
+  clearAuthCookie(res, 'noshow_admin')
+  res.json(ok(null, 'Sessão encerrada'))
+})
+
+// GET /api/admin/auth/me
+router.get('/auth/me', (req: Request, res: Response) => {
+  const token = (req as any).cookies?.noshow_admin
+  if (!token) { res.status(401).json(fail('Não autenticado')); return }
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload
+    if (payload.role !== 'superadmin') { res.status(403).json(fail('Acesso negado')); return }
+    res.json(ok({ name: 'Super Admin', role: 'superadmin' }))
+  } catch {
+    clearAuthCookie(res, 'noshow_admin')
+    res.status(401).json(fail('Sessão expirada'))
   }
 })
 

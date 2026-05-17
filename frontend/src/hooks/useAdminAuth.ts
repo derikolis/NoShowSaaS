@@ -1,34 +1,73 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import adminApi from '../services/adminApi'
 
-const TOKEN_KEY = 'noshow_admin_token'
+type AdminUser = { name: string; role: string }
+type AdminState = { status: 'loading' | 'authenticated' | 'unauthenticated'; user: AdminUser | null }
 
-function decodePayload(token: string): { role: string; name: string } {
+const SESSION_KEY = 'noshow_admin_session'
+
+let globalState: AdminState = (() => {
   try {
-    const p = JSON.parse(atob(token.split('.')[1]))
-    return { role: p.role ?? '', name: p.name ?? '' }
-  } catch {
-    return { role: '', name: '' }
-  }
+    const cached = sessionStorage.getItem(SESSION_KEY)
+    if (cached) return { status: 'authenticated', user: JSON.parse(cached) }
+  } catch { /* ignore */ }
+  return { status: 'loading', user: null }
+})()
+
+const listeners = new Set<() => void>()
+let initialized = false
+
+function setGlobal(state: AdminState) {
+  globalState = state
+  listeners.forEach(fn => fn())
+}
+
+function initAdminAuth() {
+  if (initialized) return
+  initialized = true
+  adminApi.get('/admin/auth/me')
+    .then(({ data }) => {
+      const user = data.data as AdminUser
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(user))
+      setGlobal({ status: 'authenticated', user })
+    })
+    .catch(() => {
+      sessionStorage.removeItem(SESSION_KEY)
+      setGlobal({ status: 'unauthenticated', user: null })
+    })
 }
 
 export function useAdminAuth() {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY))
+  const [, forceRender] = useState(0)
 
-  const role = token ? decodePayload(token).role : ''
-  const name = token ? decodePayload(token).name : ''
+  useEffect(() => {
+    const fn = () => forceRender(n => n + 1)
+    listeners.add(fn)
+    initAdminAuth()
+    return () => { listeners.delete(fn) }
+  }, [])
 
   async function login(email: string, password: string) {
     const { data } = await adminApi.post('/admin/auth/login', { email, password })
-    const t = data.data.token
-    localStorage.setItem(TOKEN_KEY, t)
-    setToken(t)
+    const user = data.data as AdminUser
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(user))
+    setGlobal({ status: 'authenticated', user })
   }
 
-  function logout() {
-    localStorage.removeItem(TOKEN_KEY)
-    setToken(null)
+  async function logout() {
+    await adminApi.post('/admin/auth/logout').catch(() => null)
+    sessionStorage.removeItem(SESSION_KEY)
+    setGlobal({ status: 'unauthenticated', user: null })
+    window.location.href = '/admin'
   }
 
-  return { token, role, name, login, logout }
+  return {
+    isLoading:       globalState.status === 'loading',
+    isAuthenticated: globalState.status === 'authenticated',
+    user:            globalState.user,
+    name:            globalState.user?.name ?? '',
+    role:            globalState.user?.role ?? '',
+    login,
+    logout,
+  }
 }

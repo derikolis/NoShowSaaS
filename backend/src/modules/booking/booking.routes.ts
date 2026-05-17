@@ -6,6 +6,7 @@ import { randomInt } from 'crypto'
 import { Prisma } from '@prisma/client'
 import prisma from '../../shared/utils/prisma'
 import { ok, fail } from '../../shared/types/api'
+import { setAuthCookie, clearAuthCookie } from '../../shared/utils/cookie'
 import { createPixCharge } from '../payments/payments.service'
 import { sendWhatsApp } from '../notifications/notification.service'
 import { sendEmail } from '../../shared/utils/email'
@@ -212,7 +213,8 @@ router.post('/:slug/register', async (req: Request, res: Response, next: NextFun
     }
 
     const token = signClientToken(client, tenant.id)
-    res.status(201).json(ok({ token, client: { name: client.name } }, 'Conta criada com sucesso'))
+    setAuthCookie(res, `noshow_client_${req.params.slug}`, token)
+    res.status(201).json(ok({ client: { name: client.name } }, 'Conta criada com sucesso'))
   } catch (err) { next(err) }
 })
 
@@ -248,8 +250,15 @@ router.post('/:slug/login', async (req: Request, res: Response, next: NextFuncti
     }
 
     const token = signClientToken(client!, tenant.id)
-    res.json(ok({ token, client: { name: client!.name } }, 'Login realizado'))
+    setAuthCookie(res, `noshow_client_${req.params.slug}`, token)
+    res.json(ok({ client: { name: client!.name } }, 'Login realizado'))
   } catch (err) { next(err) }
+})
+
+// ── Logout do cliente ────────────────────────────────────────────────────────
+router.post('/:slug/logout', (req: Request, res: Response) => {
+  clearAuthCookie(res, `noshow_client_${req.params.slug as string}`)
+  res.json(ok(null, 'Sessão encerrada'))
 })
 
 // ── Solicitar reset de senha ─────────────────────────────────────────────────
@@ -346,7 +355,8 @@ router.post('/:slug/reset-verify', async (req: Request, res: Response, next: Nex
     await (prisma as any).passwordReset.update({ where: { id: reset.id }, data: { usedAt: new Date() } })
 
     const token = signClientToken(client, tenant.id)
-    res.json(ok({ token, client: { name: client.name } }, 'Senha redefinida com sucesso.'))
+    setAuthCookie(res, `noshow_client_${req.params.slug as string}`, token)
+    res.json(ok({ client: { name: client.name } }, 'Senha redefinida com sucesso.'))
   } catch (err) { next(err) }
 })
 
@@ -381,7 +391,8 @@ router.post('/:slug/reset-confirm', async (req: Request, res: Response, next: Ne
     await (prisma as any).passwordReset.update({ where: { id: reset.id }, data: { usedAt: new Date() } })
 
     const token = signClientToken(client, tenant.id)
-    res.json(ok({ token, client: { name: client.name } }, 'Senha redefinida com sucesso.'))
+    setAuthCookie(res, `noshow_client_${req.params.slug as string}`, token)
+    res.json(ok({ client: { name: client.name } }, 'Senha redefinida com sucesso.'))
   } catch (err) { next(err) }
 })
 
@@ -513,12 +524,14 @@ router.post('/:slug', async (req: Request, res: Response, next: NextFunction) =>
 
 // ─── Portal do cliente (autenticado com token de cliente) ─────────────────────
 
-function requireClientAuth(req: Request, res: Response): { clientId: string; tenantId: string } | null {
+function requireClientAuth(req: Request, res: Response, slug: string): { clientId: string; tenantId: string; name: string } | null {
+  const cookieToken = (req as any).cookies?.[`noshow_client_${slug}`]
   const header = req.headers.authorization
-  if (!header?.startsWith('Bearer ')) { res.status(401).json(fail('Token não fornecido')); return null }
+  const raw = cookieToken ?? (header?.startsWith('Bearer ') ? header.slice(7) : null)
+  if (!raw) { res.status(401).json(fail('Token não fornecido')); return null }
   try {
-    const payload = jwt.verify(header.slice(7), process.env.JWT_SECRET!) as {
-      type: string; clientId: string; tenantId: string
+    const payload = jwt.verify(raw, process.env.JWT_SECRET!) as {
+      type: string; clientId: string; tenantId: string; name: string
     }
     if (payload.type !== 'client') { res.status(401).json(fail('Token inválido')); return null }
     return payload
@@ -527,6 +540,20 @@ function requireClientAuth(req: Request, res: Response): { clientId: string; ten
     return null
   }
 }
+
+// Retorna info do cliente autenticado
+router.get('/:slug/my/me', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenant = await prisma.tenant.findUnique({
+      where: { slug: req.params.slug as string },
+      select: { id: true, status: true },
+    })
+    if (!tenant || tenant.status === 'blocked') { res.status(404).json(fail('Empresa não encontrada')); return }
+    const auth = requireClientAuth(req, res, req.params.slug as string)
+    if (!auth || auth.tenantId !== tenant.id) return
+    res.json(ok({ name: auth.name, clientId: auth.clientId }))
+  } catch (err) { next(err) }
+})
 
 // Lista agendamentos do cliente autenticado
 router.get('/:slug/my/appointments', async (req: Request, res: Response, next: NextFunction) => {
@@ -537,7 +564,7 @@ router.get('/:slug/my/appointments', async (req: Request, res: Response, next: N
     })
     if (!tenant || tenant.status === 'blocked') { res.status(404).json(fail('Empresa não encontrada')); return }
 
-    const auth = requireClientAuth(req, res)
+    const auth = requireClientAuth(req, res, req.params.slug as string)
     if (!auth || auth.tenantId !== tenant.id) return
 
     const appointments = await prisma.appointment.findMany({
@@ -562,7 +589,7 @@ router.get('/:slug/my/appointments', async (req: Request, res: Response, next: N
       professionalName: profMap[a.professionalId] ?? 'Profissional',
     }))
 
-    res.json(ok(result))
+    res.json(ok({ clientName: auth.name, appointments: result }))
   } catch (err) { next(err) }
 })
 
@@ -575,7 +602,7 @@ router.patch('/:slug/my/appointments/:id/cancel', async (req: Request, res: Resp
     })
     if (!tenant || tenant.status === 'blocked') { res.status(404).json(fail('Empresa não encontrada')); return }
 
-    const auth = requireClientAuth(req, res)
+    const auth = requireClientAuth(req, res, req.params.slug as string)
     if (!auth || auth.tenantId !== tenant.id) return
 
     const appointment = await prisma.appointment.findFirst({

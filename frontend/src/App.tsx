@@ -1,4 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { Loader2 } from 'lucide-react'
+import { useAuth } from './hooks/useAuth'
+import { useAdminAuth } from './hooks/useAdminAuth'
 import LoginPage from './pages/app/LoginPage'
 import RegisterPage from './pages/app/RegisterPage'
 import DashboardPage from './pages/app/DashboardPage'
@@ -15,27 +18,35 @@ import AdminTenantsPage from './pages/admin/AdminTenantsPage'
 import LandingPage from './pages/landing/LandingPage'
 
 export default function App() {
-  const token = localStorage.getItem('noshow_token')
-  const adminToken = localStorage.getItem('noshow_admin_token')
+  const { isAuthenticated, isLoading } = useAuth()
+  const { isAuthenticated: isAdmin, isLoading: isAdminLoading } = useAdminAuth()
+
+  if (isLoading || isAdminLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 size={32} className="animate-spin text-indigo-500" />
+      </div>
+    )
+  }
 
   return (
     <Routes>
       {/* ── Tenant ─────────────────────────────────────────────────────────── */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
-      <Route path="/" element={token ? <DashboardPage /> : <LandingPage />} />
-      <Route path="/appointments" element={token ? <AppointmentsPage /> : <Navigate to="/login" />} />
-      <Route path="/clients" element={token ? <ClientsPage /> : <Navigate to="/login" />} />
-      <Route path="/professionals" element={token ? <ProfessionalsPage /> : <Navigate to="/login" />} />
-      <Route path="/services" element={token ? <ServicesPage /> : <Navigate to="/login" />} />
-      <Route path="/settings" element={token ? <SettingsPage /> : <Navigate to="/login" />} />
+      <Route path="/" element={isAuthenticated ? <DashboardPage /> : <LandingPage />} />
+      <Route path="/appointments" element={isAuthenticated ? <AppointmentsPage /> : <Navigate to="/login" />} />
+      <Route path="/clients" element={isAuthenticated ? <ClientsPage /> : <Navigate to="/login" />} />
+      <Route path="/professionals" element={isAuthenticated ? <ProfessionalsPage /> : <Navigate to="/login" />} />
+      <Route path="/services" element={isAuthenticated ? <ServicesPage /> : <Navigate to="/login" />} />
+      <Route path="/settings" element={isAuthenticated ? <SettingsPage /> : <Navigate to="/login" />} />
       <Route path="/agendar/:slug" element={<BookingPage />} />
       <Route path="/agendar/:slug/minha-conta" element={<ClientPortalPage />} />
 
       {/* ── Admin ──────────────────────────────────────────────────────────── */}
       <Route path="/admin" element={<AdminLoginPage />} />
-      <Route path="/admin/dashboard" element={adminToken ? <AdminDashboardPage /> : <Navigate to="/admin" />} />
-      <Route path="/admin/tenants" element={adminToken ? <AdminTenantsPage /> : <Navigate to="/admin" />} />
+      <Route path="/admin/dashboard" element={isAdmin ? <AdminDashboardPage /> : <Navigate to="/admin" />} />
+      <Route path="/admin/tenants" element={isAdmin ? <AdminTenantsPage /> : <Navigate to="/admin" />} />
     </Routes>
   )
 }

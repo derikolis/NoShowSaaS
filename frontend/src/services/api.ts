@@ -4,19 +4,12 @@ const baseURL = import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL}/api`
   : '/api'
 
-const api = axios.create({ baseURL })
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('noshow_token')
-  if (token) config.headers.Authorization = `Bearer ${token}`
-  return config
-})
+const api = axios.create({ baseURL, withCredentials: true })
 
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('noshow_token')
+    if (error.response?.status === 401 && !error.config?.url?.includes('/auth/me')) {
       window.location.href = '/login'
     }
     return Promise.reject(error)

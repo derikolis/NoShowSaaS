@@ -1,44 +1,74 @@
 import { useState, useEffect } from 'react'
 import api from '../services/api'
 
-const TOKEN_KEY = 'noshow_token'
+type AuthUser = { name: string; role: string; slug: string }
+type AuthState = { status: 'loading' | 'authenticated' | 'unauthenticated'; user: AuthUser | null }
 
-function decodePayload(token: string): { role: string; name: string; slug: string } {
+const SESSION_KEY = 'noshow_session'
+
+let globalState: AuthState = (() => {
   try {
-    const p = JSON.parse(atob(token.split('.')[1]))
-    return { role: p.role ?? '', name: p.name ?? '', slug: p.slug ?? '' }
-  } catch {
-    return { role: '', name: '', slug: '' }
-  }
+    const cached = sessionStorage.getItem(SESSION_KEY)
+    if (cached) return { status: 'authenticated', user: JSON.parse(cached) }
+  } catch { /* ignore */ }
+  return { status: 'loading', user: null }
+})()
+
+const listeners = new Set<() => void>()
+let initialized = false
+
+function setGlobal(state: AuthState) {
+  globalState = state
+  listeners.forEach(fn => fn())
+}
+
+function initAuth() {
+  if (initialized) return
+  initialized = true
+  api.get('/auth/me')
+    .then(({ data }) => {
+      const user = data.data as AuthUser
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(user))
+      setGlobal({ status: 'authenticated', user })
+    })
+    .catch(() => {
+      sessionStorage.removeItem(SESSION_KEY)
+      setGlobal({ status: 'unauthenticated', user: null })
+    })
 }
 
 export function useAuth() {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY))
-  const [name, setName] = useState(() => token ? decodePayload(token).name : '')
+  const [, forceRender] = useState(0)
 
-  const role = token ? decodePayload(token).role : ''
-  const slug = token ? decodePayload(token).slug : ''
-
-  // Se o token não tiver o nome (token antigo), busca do servidor
   useEffect(() => {
-    if (!token) return
-    if (decodePayload(token).name) return
-    api.get('/users/me').then(({ data }) => setName(data.data.name)).catch(() => null)
-  }, [token])
+    const fn = () => forceRender(n => n + 1)
+    listeners.add(fn)
+    initAuth()
+    return () => { listeners.delete(fn) }
+  }, [])
 
   async function login(email: string, password: string, tenantSlug: string) {
     const { data } = await api.post('/auth/login', { email, password, tenantSlug })
-    const t = data.data.token
-    localStorage.setItem(TOKEN_KEY, t)
-    setToken(t)
-    setName(decodePayload(t).name)
+    const user = data.data as AuthUser
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(user))
+    setGlobal({ status: 'authenticated', user })
   }
 
-  function logout() {
-    localStorage.removeItem(TOKEN_KEY)
-    setToken(null)
-    setName('')
+  async function logout() {
+    await api.post('/auth/logout').catch(() => null)
+    sessionStorage.removeItem(SESSION_KEY)
+    setGlobal({ status: 'unauthenticated', user: null })
+    window.location.href = '/login'
   }
 
-  return { token, role, name, slug, login, logout }
+  return {
+    isLoading:       globalState.status === 'loading',
+    isAuthenticated: globalState.status === 'authenticated',
+    user:            globalState.user,
+    name:            globalState.user?.name ?? '',
+    role:            globalState.user?.role ?? '',
+    slug:            globalState.user?.slug ?? '',
+    login,
+    logout,
+  }
 }

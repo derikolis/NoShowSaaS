@@ -1,5 +1,6 @@
 import express from 'express'
 import cors from 'cors'
+import cookieParser from 'cookie-parser'
 import rateLimit from 'express-rate-limit'
 import 'dotenv/config'
 import dashboardRoutes from './modules/dashboard/dashboard.routes'
@@ -32,6 +33,7 @@ app.use(cors({
 }))
 
 app.use(express.json({ limit: '5mb' }))
+app.use(cookieParser())
 
 // ─── Rate limiting ────────────────────────────────────────────────────────────
 

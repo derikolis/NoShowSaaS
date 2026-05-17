@@ -16,8 +16,6 @@ interface Appointment {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function storageKey(slug: string) { return `noshow_client_${slug}` }
-
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })
 }
@@ -47,7 +45,9 @@ export default function ClientPortalPage() {
 
   const [tenantName,  setTenantName]  = useState('')
   const [notFound,    setNotFound]    = useState(false)
-  const [token,       setToken]       = useState(() => localStorage.getItem(storageKey(slug!)) ?? '')
+
+  // 'loading' while checking session, 'authenticated' or 'unauthenticated'
+  const [authStatus,  setAuthStatus]  = useState<'loading' | 'authenticated' | 'unauthenticated'>('loading')
   const [clientName,  setClientName]  = useState('')
 
   // Login state
@@ -58,7 +58,6 @@ export default function ClientPortalPage() {
 
   // Appointments state
   const [appts,       setAppts]       = useState<Appointment[]>([])
-  const [loading,     setLoading]     = useState(false)
   const [cancelling,  setCancelling]  = useState<string | null>(null)
   const [cancelErr,   setCancelErr]   = useState('')
 
@@ -69,54 +68,48 @@ export default function ClientPortalPage() {
       .catch(() => setNotFound(true))
   }, [slug])
 
-  // Load appointments when token is available
+  // Check session and load appointments
   useEffect(() => {
-    if (!token) return
-    setLoading(true)
-    api.get(`/booking/${slug}/my/appointments`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(({ data }) => setAppts(data.data))
-      .catch(() => { setToken(''); localStorage.removeItem(storageKey(slug!)) })
-      .finally(() => setLoading(false))
-  }, [token, slug])
-
-  // Decode client name from JWT payload
-  useEffect(() => {
-    if (!token) return
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]))
-      setClientName(payload.name ?? '')
-    } catch { /* ignore */ }
-  }, [token])
+    api.get(`/booking/${slug}/my/appointments`)
+      .then(({ data }) => {
+        setClientName(data.data.clientName ?? '')
+        setAppts(data.data.appointments ?? [])
+        setAuthStatus('authenticated')
+      })
+      .catch((err) => {
+        if (err.response?.status === 401) {
+          setAuthStatus('unauthenticated')
+        }
+      })
+  }, [slug])
 
   async function handleLogin(e: FormEvent) {
     e.preventDefault()
     setLoginErr(''); setLogging(true)
     try {
       const { data } = await api.post(`/booking/${slug}/login`, { phone, password })
-      const t = data.data?.token
-      if (!t) throw new Error('Token não recebido')
-      localStorage.setItem(storageKey(slug!), t)
-      setToken(t)
+      setClientName(data.data?.client?.name ?? '')
+      setAuthStatus('authenticated')
+      // Load appointments after login
+      const res = await api.get(`/booking/${slug}/my/appointments`)
+      setAppts(res.data.data.appointments ?? [])
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
       setLoginErr(msg ?? 'Telefone ou senha incorretos.')
     } finally { setLogging(false) }
   }
 
-  function handleLogout() {
-    localStorage.removeItem(storageKey(slug!))
-    setToken(''); setAppts([]); setPhone(''); setPassword('')
+  async function handleLogout() {
+    await api.post(`/booking/${slug}/logout`).catch(() => null)
+    setAuthStatus('unauthenticated')
+    setAppts([]); setPhone(''); setPassword('')
   }
 
   async function handleCancel(id: string) {
     if (!confirm('Deseja cancelar este agendamento?')) return
     setCancelErr(''); setCancelling(id)
     try {
-      await api.patch(`/booking/${slug}/my/appointments/${id}/cancel`, {}, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      await api.patch(`/booking/${slug}/my/appointments/${id}/cancel`, {})
       setAppts(prev => prev.map(a => a.id === id ? { ...a, status: 'cancelled' } : a))
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
@@ -146,7 +139,7 @@ export default function ClientPortalPage() {
           <p className="text-xs font-semibold text-indigo-500 uppercase tracking-widest">Minha conta</p>
           <h1 className="text-lg font-bold text-gray-900">{tenantName}</h1>
         </div>
-        {token && (
+        {authStatus === 'authenticated' && (
           <button onClick={handleLogout} className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-600 cursor-pointer">
             <LogOut size={15} /> Sair
           </button>
@@ -155,8 +148,15 @@ export default function ClientPortalPage() {
 
       <main className="flex-1 max-w-lg mx-auto w-full px-4 py-8">
 
+        {/* ── Loading session ── */}
+        {authStatus === 'loading' && (
+          <div className="flex justify-center py-16">
+            <Loader2 size={28} className="text-indigo-500 animate-spin" />
+          </div>
+        )}
+
         {/* ── Login ── */}
-        {!token && (
+        {authStatus === 'unauthenticated' && (
           <div>
             <div className="w-14 h-14 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Lock size={24} className="text-indigo-600" />
@@ -209,15 +209,8 @@ export default function ClientPortalPage() {
           </div>
         )}
 
-        {/* ── Loading ── */}
-        {token && loading && (
-          <div className="flex justify-center py-16">
-            <Loader2 size={28} className="text-indigo-500 animate-spin" />
-          </div>
-        )}
-
         {/* ── Appointments ── */}
-        {token && !loading && (
+        {authStatus === 'authenticated' && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
