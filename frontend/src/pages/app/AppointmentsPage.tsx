@@ -227,7 +227,7 @@ function AppointmentDrawer({
   return (
     <>
       <div className="fixed inset-0 bg-black/25 z-40" onClick={onClose} />
-      <div className="fixed inset-y-0 right-0 w-[420px] bg-white z-50 shadow-2xl flex flex-col">
+      <div className="fixed inset-y-0 right-0 w-105 bg-white z-50 shadow-2xl flex flex-col">
 
         <div className="flex items-start justify-between px-6 py-5 border-b border-gray-100">
           <div>
