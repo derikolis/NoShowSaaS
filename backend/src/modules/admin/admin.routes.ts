@@ -100,6 +100,14 @@ router.post('/tenants', async (req: Request, res: Response, next: NextFunction) 
   }
 })
 
+// GET /api/admin/tenants/health
+router.get('/tenants/health', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await adminService.getTenantHealth()
+    res.json(ok(data))
+  } catch (err) { next(err) }
+})
+
 // PATCH /api/admin/tenants/:id/status
 router.patch('/tenants/:id/status', async (req: Request, res: Response, next: NextFunction) => {
   try {

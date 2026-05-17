@@ -97,3 +97,74 @@ export async function updateTenantStatus(id: string, status: string) {
 
   await prisma.tenant.update({ where: { id }, data: { status } })
 }
+
+export async function getTenantHealth() {
+  const now = new Date()
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+
+  const tenants = await prisma.tenant.findMany({
+    orderBy: { createdAt: 'desc' },
+    include: {
+      users: { where: { role: 'owner' }, select: { email: true }, take: 1 },
+    },
+  })
+
+  const results = await Promise.all(tenants.map(async (t) => {
+    const [
+      totalClients,
+      totalAppointments,
+      appointmentsThisMonth,
+      noShowCount,
+      confirmedCount,
+      completedCount,
+      pendingCount,
+      notificationsSent,
+      lastAppt,
+    ] = await Promise.all([
+      prisma.client.count({ where: { tenantId: t.id } }),
+      prisma.appointment.count({ where: { tenantId: t.id } }),
+      prisma.appointment.count({ where: { tenantId: t.id, createdAt: { gte: startOfMonth } } }),
+      prisma.appointment.count({ where: { tenantId: t.id, status: 'no_show' } }),
+      prisma.appointment.count({ where: { tenantId: t.id, status: 'confirmed' } }),
+      prisma.appointment.count({ where: { tenantId: t.id, status: 'completed' } }),
+      prisma.appointment.count({ where: { tenantId: t.id, status: 'scheduled' } }),
+      prisma.notification.count({ where: { tenantId: t.id, status: 'sent', sentAt: { gte: startOfMonth } } }),
+      prisma.appointment.findFirst({
+        where: { tenantId: t.id },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      }),
+    ])
+
+    const concluded = noShowCount + confirmedCount + completedCount
+    const noShowRate = concluded > 0 ? Math.round((noShowCount / concluded) * 100) : null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tAny = t as any
+
+    return {
+      id:         t.id,
+      name:       t.name,
+      slug:       t.slug,
+      plan:       t.plan,
+      status:     t.status,
+      ownerEmail: t.users[0]?.email ?? '',
+      createdAt:  t.createdAt,
+      stats: {
+        totalClients,
+        totalAppointments,
+        appointmentsThisMonth,
+        noShowRate,
+        pendingAppointments:        pendingCount,
+        notificationsSentThisMonth: notificationsSent,
+        lastActivityAt:             lastAppt?.createdAt ?? null,
+      },
+      config: {
+        whatsappConfigured: !!(t.evolutionApiUrl && t.evolutionApiKey),
+        reminderEnabled:    tAny.reminderEnabled ?? true,
+        paymentConfigured:  !!(tAny.paymentProvider && (tAny.mpAccessToken || tAny.stripeSecretKey || tAny.abacatePayApiKey)),
+      },
+    }
+  }))
+
+  return results
+}

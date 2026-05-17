@@ -15,6 +15,7 @@ import SettingsPage from './pages/app/SettingsPage'
 import AdminLoginPage from './pages/admin/AdminLoginPage'
 import AdminDashboardPage from './pages/admin/AdminDashboardPage'
 import AdminTenantsPage from './pages/admin/AdminTenantsPage'
+import AdminStatusPage from './pages/admin/AdminStatusPage'
 import LandingPage from './pages/landing/LandingPage'
 
 export default function App() {
@@ -47,6 +48,7 @@ export default function App() {
       <Route path="/admin" element={<AdminLoginPage />} />
       <Route path="/admin/dashboard" element={isAdmin ? <AdminDashboardPage /> : <Navigate to="/admin" />} />
       <Route path="/admin/tenants" element={isAdmin ? <AdminTenantsPage /> : <Navigate to="/admin" />} />
+      <Route path="/admin/status"  element={isAdmin ? <AdminStatusPage />  : <Navigate to="/admin" />} />
     </Routes>
   )
 }
