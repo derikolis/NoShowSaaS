@@ -72,6 +72,7 @@ export default function ClientPortalPage() {
 
   // Check session and load appointments
   useEffect(() => {
+    if (isStaff) return
     api.get(`/booking/${slug}/my/appointments`)
       .then(({ data }) => {
         setClientName(data.data.clientName ?? '')
@@ -83,7 +84,7 @@ export default function ClientPortalPage() {
           setAuthStatus('unauthenticated')
         }
       })
-  }, [slug])
+  }, [slug, isStaff])
 
   async function handleLogin(e: FormEvent) {
     e.preventDefault()
