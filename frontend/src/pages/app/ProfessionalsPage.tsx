@@ -44,6 +44,29 @@ const DAYS = [
 
 const EMPTY_SCHEDULE: WeekSchedule = { mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [] }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function resizeImage(file: File, size: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = reject
+    reader.onload = ev => {
+      const img = new Image()
+      img.onerror = reject
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        const scale  = Math.min(size / img.width, size / img.height, 1)
+        canvas.width  = Math.round(img.width  * scale)
+        canvas.height = Math.round(img.height * scale)
+        canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height)
+        resolve(canvas.toDataURL('image/jpeg', 0.85))
+      }
+      img.src = ev.target!.result as string
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
 // ─── Schedule Editor ──────────────────────────────────────────────────────────
 
 function ScheduleEditor({
@@ -196,17 +219,13 @@ function MemberDrawer({
     if (!file) return
     setSavingPhoto(true)
     try {
-      const reader = new FileReader()
-      reader.onload = async ev => {
-        const photoUrl = ev.target?.result as string
-        const { data } = await api.put(`/users/${member.id}`, { photoUrl })
-        showToast('Foto atualizada')
-        onUpdated(data.data)
-        setSavingPhoto(false)
-      }
-      reader.readAsDataURL(file)
+      const photoUrl = await resizeImage(file, 300)
+      const { data } = await api.put(`/users/${member.id}`, { photoUrl })
+      showToast('Foto atualizada')
+      onUpdated(data.data)
     } catch {
       showToast('Erro ao salvar foto')
+    } finally {
       setSavingPhoto(false)
     }
   }
