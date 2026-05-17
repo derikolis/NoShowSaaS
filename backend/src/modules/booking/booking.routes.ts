@@ -684,4 +684,34 @@ router.patch('/:slug/my/appointments/:id/cancel', async (req: Request, res: Resp
   } catch (err) { next(err) }
 })
 
+// LGPD: exclusão de conta do cliente (apaga dados pessoais)
+router.delete('/:slug/my/account', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenant = await prisma.tenant.findUnique({
+      where: { slug: req.params.slug as string },
+      select: { id: true, status: true },
+    })
+    if (!tenant || tenant.status === 'blocked') { res.status(404).json(fail('Empresa não encontrada')); return }
+
+    const auth = requireClientAuth(req, res, req.params.slug as string)
+    if (!auth || auth.tenantId !== tenant.id) return
+
+    // Anonimiza os dados pessoais em vez de deletar (preserva histórico de agendamentos)
+    await prisma.client.update({
+      where: { id: auth.clientId },
+      data: {
+        name:         'Cliente removido',
+        phone:        `deleted_${auth.clientId.slice(0, 8)}`,
+        email:        null,
+        passwordHash: null,
+        consentedAt:  null,
+        riskScore:    0,
+      },
+    })
+
+    clearAuthCookie(res, `noshow_client_${req.params.slug}`)
+    res.json(ok(null, 'Conta removida'))
+  } catch (err) { next(err) }
+})
+
 export default router

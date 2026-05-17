@@ -22,11 +22,17 @@ function applyTemplate(template: string, vars: Record<string, string>): string {
 export async function getTenantTemplates(tenantId: string) {
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
-    select: { reminderTemplate: true, confirmationTemplate: true },
+    select: { reminderTemplate: true, confirmationTemplate: true, reminderEnabled: true, reminder1Hours: true, reminder2Hours: true },
   })
   return {
     reminderTemplate: tenant?.reminderTemplate ?? DEFAULT_REMINDER_TEMPLATE,
     confirmationTemplate: tenant?.confirmationTemplate ?? DEFAULT_CONFIRMATION_TEMPLATE,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    reminderEnabled: (tenant as any)?.reminderEnabled ?? true,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    reminder1Hours: (tenant as any)?.reminder1Hours ?? 24,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    reminder2Hours: (tenant as any)?.reminder2Hours ?? 2,
   }
 }
 
@@ -45,14 +51,17 @@ export async function scheduleRiskBasedReminders(
   scheduledAt: Date,
   level: RiskLevel,
 ) {
+  const { reminderEnabled, reminder1Hours, reminder2Hours } = await getTenantTemplates(tenantId)
+  if (!reminderEnabled) return
+
   const now = Date.now()
   const apptTime = scheduledAt.getTime()
 
-  const delay24h = apptTime - now - 24 * 60 * 60 * 1000
-  const delay2h  = apptTime - now -  2 * 60 * 60 * 1000
+  const delay1 = apptTime - now - reminder1Hours * 60 * 60 * 1000
+  const delay2 = apptTime - now - reminder2Hours * 60 * 60 * 1000
 
-  if (delay24h > 0) await addReminder(appointmentId, tenantId, 'reminder_24h', delay24h)
-  if (delay2h  > 0) await addReminder(appointmentId, tenantId, 'reminder_2h',  delay2h)
+  if (delay1 > 0) await addReminder(appointmentId, tenantId, 'reminder_24h', delay1)
+  if (delay2 > 0) await addReminder(appointmentId, tenantId, 'reminder_2h',  delay2)
 
   if (level === 'medium' || level === 'high') {
     const delay4h = apptTime - now - 4 * 60 * 60 * 1000

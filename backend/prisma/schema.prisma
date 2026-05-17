@@ -21,6 +21,9 @@ model Tenant {
   reminderTemplate     String?
   confirmationTemplate String?
   peakHours            Json?
+  reminderEnabled      Boolean @default(true)
+  reminder1Hours       Int     @default(24)
+  reminder2Hours       Int     @default(2)
   paymentProvider      String?   // mercadopago | stripe | abacatepay
   mpAccessToken        String?
   stripeSecretKey      String?

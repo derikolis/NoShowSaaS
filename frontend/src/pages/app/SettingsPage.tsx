@@ -20,6 +20,9 @@ type Settings = {
   reminderTemplate: string | null
   confirmationTemplate: string | null
   peakHours: PeakRange[] | null
+  reminderEnabled: boolean
+  reminder1Hours: number
+  reminder2Hours: number
   paymentProvider: string | null
   mpAccessToken: string | null
   stripeSecretKey: string | null
@@ -110,6 +113,9 @@ export default function SettingsPage() {
   // Templates state
   const [reminderTpl,      setReminderTpl]      = useState(DEFAULT_REMINDER)
   const [confirmationTpl,  setConfirmationTpl]  = useState(DEFAULT_CONFIRMATION)
+  const [reminderEnabled,  setReminderEnabled]  = useState(true)
+  const [reminder1Hours,   setReminder1Hours]   = useState(24)
+  const [reminder2Hours,   setReminder2Hours]   = useState(2)
   const [savingTpl,        setSavingTpl]        = useState(false)
 
   // Booking link state
@@ -164,6 +170,9 @@ export default function SettingsPage() {
       setWaPhone(s.whatsappPhone ?? '')
       setReminderTpl(s.reminderTemplate ?? DEFAULT_REMINDER)
       setConfirmationTpl(s.confirmationTemplate ?? DEFAULT_CONFIRMATION)
+      setReminderEnabled(s.reminderEnabled ?? true)
+      setReminder1Hours(s.reminder1Hours ?? 24)
+      setReminder2Hours(s.reminder2Hours ?? 2)
       setPeakHours(s.peakHours ?? [{ start: 12, end: 14 }, { start: 18, end: 20 }])
       setPaymentProvider(s.paymentProvider ?? 'abacatepay')
       setMpToken(s.mpAccessToken ?? '')
@@ -225,9 +234,15 @@ export default function SettingsPage() {
   async function handleSaveTemplates(e: React.FormEvent) {
     e.preventDefault(); setSavingTpl(true)
     try {
-      await api.put('/settings', { reminderTemplate: reminderTpl || null, confirmationTemplate: confirmationTpl || null })
-      showToast('success', 'Templates salvos.')
-    } catch { showToast('error', 'Erro ao salvar templates.') }
+      await api.put('/settings', {
+        reminderTemplate: reminderTpl || null,
+        confirmationTemplate: confirmationTpl || null,
+        reminderEnabled,
+        reminder1Hours,
+        reminder2Hours,
+      })
+      showToast('success', 'Notificações salvas.')
+    } catch { showToast('error', 'Erro ao salvar.') }
     finally { setSavingTpl(false) }
   }
 
@@ -494,13 +509,57 @@ export default function SettingsPage() {
       <form onSubmit={handleSaveTemplates} className="space-y-6">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Notificações</h2>
-          <p className="text-sm text-gray-500 mt-1">Personalize o texto das mensagens enviadas via WhatsApp.</p>
+          <p className="text-sm text-gray-500 mt-1">Configure quando e como os lembretes são enviados via WhatsApp.</p>
+        </div>
+
+        {/* Reminder toggle + hours */}
+        <div className="border border-gray-200 rounded-xl p-5 space-y-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-800">Lembretes automáticos</p>
+              <p className="text-xs text-gray-400 mt-0.5">Envia WhatsApp aos clientes antes do horário agendado</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setReminderEnabled(v => !v)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${reminderEnabled ? 'bg-indigo-600' : 'bg-gray-200'}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${reminderEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </div>
+
+          {reminderEnabled && (
+            <div className="grid grid-cols-2 gap-4 pt-1 border-t border-gray-100">
+              <Field label="Primeiro lembrete" hint="Horas antes do agendamento">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number" min={1} max={72}
+                    value={reminder1Hours}
+                    onChange={e => setReminder1Hours(Number(e.target.value))}
+                    className={inputCls}
+                  />
+                  <span className="text-sm text-gray-500 shrink-0">h antes</span>
+                </div>
+              </Field>
+              <Field label="Segundo lembrete" hint="Horas antes do agendamento">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number" min={1} max={24}
+                    value={reminder2Hours}
+                    onChange={e => setReminder2Hours(Number(e.target.value))}
+                    className={inputCls}
+                  />
+                  <span className="text-sm text-gray-500 shrink-0">h antes</span>
+                </div>
+              </Field>
+            </div>
+          )}
         </div>
 
         <div className="space-y-6">
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-sm font-medium text-gray-700">Lembrete — 24h e 2h antes</label>
+              <label className="text-sm font-medium text-gray-700">Texto do lembrete</label>
               <span className="text-xs text-gray-400 font-mono bg-gray-50 border border-gray-200 px-2 py-0.5 rounded">
                 {'{nome}'} {'{hora}'} {'{profissional}'} {'{data}'}
               </span>

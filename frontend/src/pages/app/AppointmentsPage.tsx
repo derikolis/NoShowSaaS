@@ -2,7 +2,7 @@ import { useEffect, useState, FormEvent, useCallback } from 'react'
 import {
   X, Phone, Calendar, User, Briefcase, CalendarDays, Search,
   CheckCircle2, XCircle, AlertCircle, ChevronLeft, ChevronRight,
-  MoreHorizontal, Clock,
+  MoreHorizontal, Clock, CheckCheck,
 } from 'lucide-react'
 import Layout from '../../components/Layout'
 import api from '../../services/api'
@@ -25,10 +25,11 @@ interface Appointment {
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { label: string; dot: string; cls: string }> = {
-  scheduled: { label: 'Agendado',   dot: 'bg-blue-500',  cls: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200'   },
-  confirmed: { label: 'Confirmado', dot: 'bg-green-500', cls: 'bg-green-50 text-green-700 ring-1 ring-green-200' },
-  cancelled: { label: 'Cancelado',  dot: 'bg-gray-400',  cls: 'bg-gray-50 text-gray-600 ring-1 ring-gray-200'   },
-  no_show:   { label: 'No-show',    dot: 'bg-red-500',   cls: 'bg-red-50 text-red-700 ring-1 ring-red-200'      },
+  scheduled:  { label: 'Agendado',   dot: 'bg-blue-500',   cls: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200'     },
+  confirmed:  { label: 'Confirmado', dot: 'bg-green-500',  cls: 'bg-green-50 text-green-700 ring-1 ring-green-200'  },
+  completed:  { label: 'Realizado',  dot: 'bg-indigo-500', cls: 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200' },
+  cancelled:  { label: 'Cancelado',  dot: 'bg-gray-400',   cls: 'bg-gray-50 text-gray-600 ring-1 ring-gray-200'     },
+  no_show:    { label: 'No-show',    dot: 'bg-red-500',    cls: 'bg-red-50 text-red-700 ring-1 ring-red-200'        },
 }
 
 type Period = 'day' | 'week' | 'month'
@@ -184,11 +185,11 @@ function AppointmentDrawer({
   const dateStr = dt.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
   const timeStr = dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 
-  async function handleAction(type: 'confirm' | 'cancel' | 'no-show') {
+  async function handleAction(type: 'confirm' | 'cancel' | 'no-show' | 'complete') {
     setActionLoading(type)
     try {
       await api.patch(`/appointments/${appointment.id}/${type}`)
-      const labels: Record<string, string> = { confirm: 'confirmado', cancel: 'cancelado', 'no-show': 'marcado como no-show' }
+      const labels: Record<string, string> = { confirm: 'confirmado', cancel: 'cancelado', 'no-show': 'marcado como no-show', complete: 'marcado como realizado' }
       showToast(`Agendamento ${labels[type]}`)
       onRefresh()
     } catch { showToast('Erro ao atualizar agendamento') }
@@ -308,12 +309,20 @@ function AppointmentDrawer({
             )}
 
             {appointment.status === 'confirmed' && (
-              <button
-                onClick={() => handleAction('no-show')} disabled={!!actionLoading}
-                className="w-full py-2.5 bg-white hover:bg-orange-50 text-orange-600 text-sm font-semibold rounded-lg border border-orange-200 transition-colors"
-              >
-                {actionLoading === 'no-show' ? 'Registrando...' : 'Marcar como no-show'}
-              </button>
+              <>
+                <button
+                  onClick={() => handleAction('complete')} disabled={!!actionLoading}
+                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors"
+                >
+                  {actionLoading === 'complete' ? 'Salvando...' : 'Marcar como realizado'}
+                </button>
+                <button
+                  onClick={() => handleAction('no-show')} disabled={!!actionLoading}
+                  className="w-full py-2.5 bg-white hover:bg-orange-50 text-orange-600 text-sm font-semibold rounded-lg border border-orange-200 transition-colors"
+                >
+                  {actionLoading === 'no-show' ? 'Registrando...' : 'Marcar como no-show'}
+                </button>
+              </>
             )}
 
             {appointment.status === 'cancelled' && (
@@ -362,7 +371,7 @@ function AppointmentDrawer({
               </div>
             )}
 
-            {appointment.status === 'no_show' && (
+            {(appointment.status === 'no_show' || appointment.status === 'completed') && (
               <p className="text-sm text-gray-400 text-center py-4">Nenhuma ação disponível para este status.</p>
             )}
           </div>
@@ -450,7 +459,7 @@ function NewAppointmentModal({ clients, professionals, onClose, onCreated, showT
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-type StatusCounts = { scheduled: number; confirmed: number; no_show: number; cancelled: number }
+type StatusCounts = { scheduled: number; confirmed: number; completed: number; no_show: number; cancelled: number }
 type ConfirmState = { id: string; action: 'cancel' | 'no-show'; clientName: string } | null
 
 export default function AppointmentsPage() {
@@ -471,7 +480,7 @@ export default function AppointmentsPage() {
   const [toast,         setToast]         = useState('')
   const [loading,       setLoading]       = useState(false)
   const [countsLoading, setCountsLoading] = useState(false)
-  const [statusCounts,  setStatusCounts]  = useState<StatusCounts>({ scheduled: 0, confirmed: 0, no_show: 0, cancelled: 0 })
+  const [statusCounts,  setStatusCounts]  = useState<StatusCounts>({ scheduled: 0, confirmed: 0, completed: 0, no_show: 0, cancelled: 0 })
   const [confirm,       setConfirm]       = useState<ConfirmState>(null)
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 3000) }
@@ -507,14 +516,16 @@ export default function AppointmentsPage() {
       limit: 1,
     }
     Promise.all([
-      api.get('/appointments', { params: { ...base, status: 'scheduled' } }),
-      api.get('/appointments', { params: { ...base, status: 'confirmed' } }),
-      api.get('/appointments', { params: { ...base, status: 'no_show'   } }),
-      api.get('/appointments', { params: { ...base, status: 'cancelled' } }),
-    ]).then(([s, c, ns, ca]) => {
+      api.get('/appointments', { params: { ...base, status: 'scheduled'  } }),
+      api.get('/appointments', { params: { ...base, status: 'confirmed'  } }),
+      api.get('/appointments', { params: { ...base, status: 'completed'  } }),
+      api.get('/appointments', { params: { ...base, status: 'no_show'    } }),
+      api.get('/appointments', { params: { ...base, status: 'cancelled'  } }),
+    ]).then(([s, c, done, ns, ca]) => {
       setStatusCounts({
         scheduled: s.data.data.total,
         confirmed: c.data.data.total,
+        completed: done.data.data.total,
         no_show:   ns.data.data.total,
         cancelled: ca.data.data.total,
       })
@@ -565,12 +576,13 @@ export default function AppointmentsPage() {
   function goPrev()  { setAnchor(shiftAnchor(period, anchor, -1)) }
   function goNext()  { setAnchor(shiftAnchor(period, anchor, 1)) }
 
-  const totalAll = statusCounts.scheduled + statusCounts.confirmed + statusCounts.no_show + statusCounts.cancelled
+  const totalAll = statusCounts.scheduled + statusCounts.confirmed + statusCounts.completed + statusCounts.no_show + statusCounts.cancelled
 
   const TABS = [
     { key: 'all',       label: 'Todos',       count: totalAll                  },
     { key: 'scheduled', label: 'Agendados',   count: statusCounts.scheduled    },
     { key: 'confirmed', label: 'Confirmados', count: statusCounts.confirmed    },
+    { key: 'completed', label: 'Realizados',  count: statusCounts.completed    },
     { key: 'no_show',   label: 'No-show',     count: statusCounts.no_show      },
     { key: 'cancelled', label: 'Cancelados',  count: statusCounts.cancelled    },
   ]
@@ -626,11 +638,12 @@ export default function AppointmentsPage() {
         </div>
 
         {/* ── Stat Cards ──────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-4 gap-4 mb-6">
-          <StatCard label="Agendados"   value={statusCounts.scheduled} dot="bg-blue-500"  loading={countsLoading} />
-          <StatCard label="Confirmados" value={statusCounts.confirmed} dot="bg-green-500" loading={countsLoading} />
-          <StatCard label="No-shows"    value={statusCounts.no_show}   dot="bg-red-500"   loading={countsLoading} />
-          <StatCard label="Cancelados"  value={statusCounts.cancelled} dot="bg-gray-400"  loading={countsLoading} />
+        <div className="grid grid-cols-5 gap-4 mb-6">
+          <StatCard label="Agendados"   value={statusCounts.scheduled} dot="bg-blue-500"   loading={countsLoading} />
+          <StatCard label="Confirmados" value={statusCounts.confirmed} dot="bg-green-500"  loading={countsLoading} />
+          <StatCard label="Realizados"  value={statusCounts.completed} dot="bg-indigo-500" loading={countsLoading} />
+          <StatCard label="No-shows"    value={statusCounts.no_show}   dot="bg-red-500"    loading={countsLoading} />
+          <StatCard label="Cancelados"  value={statusCounts.cancelled} dot="bg-gray-400"   loading={countsLoading} />
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-100">
@@ -739,10 +752,11 @@ export default function AppointmentsPage() {
               )}
 
               {!loading && filtered.map(a => {
-                const loadingConfirm = inlineLoading === `${a.id}-confirm`
-                const loadingCancel  = inlineLoading === `${a.id}-cancel`
-                const loadingNoShow  = inlineLoading === `${a.id}-no-show`
-                const anyLoading     = loadingConfirm || loadingCancel || loadingNoShow
+                const loadingConfirm   = inlineLoading === `${a.id}-confirm`
+                const loadingCancel    = inlineLoading === `${a.id}-cancel`
+                const loadingNoShow    = inlineLoading === `${a.id}-no-show`
+                const loadingComplete  = inlineLoading === `${a.id}-complete`
+                const anyLoading       = loadingConfirm || loadingCancel || loadingNoShow || loadingComplete
 
                 return (
                   <tr
@@ -798,14 +812,24 @@ export default function AppointmentsPage() {
                           </>
                         )}
                         {a.status === 'confirmed' && (
-                          <button
-                            onClick={e => requestInlineAction(e, a.id, 'no-show', a.client.name)}
-                            disabled={anyLoading}
-                            title="Marcar no-show"
-                            className="w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:text-orange-500 hover:bg-orange-50 transition-colors disabled:opacity-40"
-                          >
-                            {loadingNoShow ? <span className="text-[10px]">…</span> : <AlertCircle size={15} />}
-                          </button>
+                          <>
+                            <button
+                              onClick={async e => { e.stopPropagation(); setInlineLoading(`${a.id}-complete`); try { await api.patch(`/appointments/${a.id}/complete`); showToast('Realizado'); load(page) } catch { showToast('Erro') } finally { setInlineLoading(null) } }}
+                              disabled={anyLoading}
+                              title="Marcar como realizado"
+                              className="w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-40"
+                            >
+                              {loadingComplete ? <span className="text-[10px]">…</span> : <CheckCheck size={15} />}
+                            </button>
+                            <button
+                              onClick={e => requestInlineAction(e, a.id, 'no-show', a.client.name)}
+                              disabled={anyLoading}
+                              title="Marcar no-show"
+                              className="w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:text-orange-500 hover:bg-orange-50 transition-colors disabled:opacity-40"
+                            >
+                              {loadingNoShow ? <span className="text-[10px]">…</span> : <AlertCircle size={15} />}
+                            </button>
+                          </>
                         )}
                         <button
                           onClick={e => { e.stopPropagation(); setSelected(a) }}

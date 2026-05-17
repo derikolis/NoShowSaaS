@@ -22,6 +22,9 @@ const updateSchema = z.object({
   reminderTemplate:     z.string().min(10, 'Template muito curto').optional().nullable(),
   confirmationTemplate: z.string().min(10, 'Template muito curto').optional().nullable(),
   peakHours:            z.array(peakHourRangeSchema).optional().nullable(),
+  reminderEnabled:      z.boolean().optional(),
+  reminder1Hours:       z.number().int().min(1).max(72).optional(),
+  reminder2Hours:       z.number().int().min(1).max(24).optional(),
   paymentProvider:      z.enum(['mercadopago', 'stripe', 'abacatepay']).optional().nullable(),
   mpAccessToken:        z.string().optional().nullable(),
   stripeSecretKey:      z.string().optional().nullable(),
@@ -32,23 +35,17 @@ const updateSchema = z.object({
   noShowFee:            z.number().min(0).optional().nullable(),
 })
 
-function tenantFields(tenant: {
-  name: string; slug: string
-  whatsappPhone: string | null; evolutionApiUrl: string | null
-  evolutionApiKey: string | null; evolutionInstance: string | null
-  reminderTemplate: string | null; confirmationTemplate: string | null
-  peakHours: unknown
-  paymentProvider: string | null
-  mpAccessToken: string | null; stripeSecretKey: string | null
-  stripeWebhookSecret: string | null; abacatePayApiKey: string | null
-  paymentFlow: string | null; depositPercent: number | null; noShowFee: number | null
-}) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function tenantFields(tenant: any) {
   return {
     name: tenant.name, slug: tenant.slug,
     whatsappPhone: tenant.whatsappPhone, evolutionApiUrl: tenant.evolutionApiUrl,
     evolutionApiKey: tenant.evolutionApiKey, evolutionInstance: tenant.evolutionInstance,
     reminderTemplate: tenant.reminderTemplate, confirmationTemplate: tenant.confirmationTemplate,
     peakHours: tenant.peakHours,
+    reminderEnabled: tenant.reminderEnabled ?? true,
+    reminder1Hours: tenant.reminder1Hours ?? 24,
+    reminder2Hours: tenant.reminder2Hours ?? 2,
     paymentProvider: tenant.paymentProvider,
     mpAccessToken: tenant.mpAccessToken, stripeSecretKey: tenant.stripeSecretKey,
     stripeWebhookSecret: tenant.stripeWebhookSecret, abacatePayApiKey: tenant.abacatePayApiKey,

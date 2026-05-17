@@ -1,6 +1,6 @@
 import { useEffect, useState, FormEvent } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { CalendarDays, CheckCircle2, Clock, Loader2, LogOut, Phone, Lock, XCircle, AlertCircle } from 'lucide-react'
+import { CalendarDays, CheckCircle2, Clock, Loader2, LogOut, Phone, Lock, XCircle, AlertCircle, Trash2 } from 'lucide-react'
 import api from '../../services/api'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -103,6 +103,19 @@ export default function ClientPortalPage() {
     await api.post(`/booking/${slug}/logout`).catch(() => null)
     setAuthStatus('unauthenticated')
     setAppts([]); setPhone(''); setPassword('')
+  }
+
+  const [deletingAccount, setDeletingAccount] = useState(false)
+
+  async function handleDeleteAccount() {
+    if (!confirm('Tem certeza? Todos os seus dados pessoais serão apagados permanentemente (LGPD). Esta ação não pode ser desfeita.')) return
+    setDeletingAccount(true)
+    try {
+      await api.delete(`/booking/${slug}/my/account`)
+      setAuthStatus('unauthenticated')
+      setAppts([]); setPhone(''); setPassword('')
+    } catch { /* silently fail */ }
+    finally { setDeletingAccount(false) }
   }
 
   async function handleCancel(id: string) {
@@ -300,6 +313,17 @@ export default function ClientPortalPage() {
                 </div>
               </section>
             )}
+            {/* LGPD */}
+            <div className="pt-4 border-t border-gray-100 text-center">
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deletingAccount}
+                className="flex items-center gap-1.5 text-xs text-gray-300 hover:text-red-400 disabled:opacity-50 cursor-pointer mx-auto transition-colors"
+              >
+                <Trash2 size={12} />
+                {deletingAccount ? 'Removendo...' : 'Excluir minha conta (LGPD)'}
+              </button>
+            </div>
           </div>
         )}
       </main>
