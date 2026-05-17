@@ -53,6 +53,17 @@ router.get('/:slug', async (req: Request, res: Response, next: NextFunction) => 
 })
 
 // ── Horários disponíveis ─────────────────────────────────────────────────────
+
+type DayPeriod    = { start: string; end: string }
+type WeekSchedule = Record<string, DayPeriod[]>
+const WEEK_KEYS   = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+const DEFAULT_DAY = [{ start: '08:00', end: '18:00' }]
+
+function toMinutes(time: string): number {
+  const [h, m] = time.split(':').map(Number)
+  return h * 60 + (m ?? 0)
+}
+
 router.get('/:slug/slots', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { date, professionalId, duration } = req.query as Record<string, string>
@@ -68,6 +79,19 @@ router.get('/:slug/slots', async (req: Request, res: Response, next: NextFunctio
       res.status(404).json(fail('Empresa não encontrada')); return
     }
 
+    // Busca horários do profissional
+    const professional = await prisma.user.findFirst({
+      where: { id: professionalId, tenantId: tenant.id },
+    }) as unknown as { weekSchedule: WeekSchedule | null } | null
+    if (!professional) { res.json(ok([])); return }
+
+    const schedule   = professional.weekSchedule ?? null
+    const dayKey     = WEEK_KEYS[new Date(`${date}T12:00:00`).getDay()]
+    const dayPeriods = schedule ? (schedule[dayKey] ?? []) : DEFAULT_DAY
+
+    // Dia sem expediente → retorna vazio
+    if (dayPeriods.length === 0) { res.json(ok([])); return }
+
     const dayStart = new Date(`${date}T00:00:00`)
     const dayEnd   = new Date(`${date}T23:59:59`)
 
@@ -82,19 +106,21 @@ router.get('/:slug/slots', async (req: Request, res: Response, next: NextFunctio
     })
 
     const takenMs = new Set(booked.map(a => a.scheduledAt.getTime()))
-    const dur = Math.max(parseInt(duration) || 60, 15)
-    const now = new Date()
-    const slots: string[] = []
+    const dur     = Math.max(parseInt(duration) || 60, 15)
+    const now     = new Date()
+    const slots:  string[] = []
 
-    const START = 8 * 60
-    const END   = 18 * 60 - dur
+    for (const period of dayPeriods) {
+      const start = toMinutes(period.start)
+      const end   = toMinutes(period.end) - dur
 
-    for (let m = START; m <= END; m += dur) {
-      const slot = new Date(`${date}T00:00:00`)
-      slot.setHours(Math.floor(m / 60), m % 60, 0, 0)
-      if (slot <= now) continue
-      if (takenMs.has(slot.getTime())) continue
-      slots.push(slot.toISOString())
+      for (let m = start; m <= end; m += dur) {
+        const slot = new Date(`${date}T00:00:00`)
+        slot.setHours(Math.floor(m / 60), m % 60, 0, 0)
+        if (slot <= now) continue
+        if (takenMs.has(slot.getTime())) continue
+        slots.push(slot.toISOString())
+      }
     }
 
     res.json(ok(slots))
