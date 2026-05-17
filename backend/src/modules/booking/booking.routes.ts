@@ -245,7 +245,7 @@ router.post('/:slug', async (req: Request, res: Response, next: NextFunction) =>
 
     const tenant = await prisma.tenant.findUnique({
       where: { slug: (req.params.slug as string) },
-      select: { id: true, status: true, mpAccessToken: true, paymentFlow: true, depositPercent: true },
+      select: { id: true, status: true, paymentProvider: true, mpAccessToken: true, stripeSecretKey: true, abacatePayApiKey: true, paymentFlow: true, depositPercent: true },
     })
     if (!tenant || tenant.status !== 'active') {
       res.status(404).json(fail('Empresa não encontrada ou inativa')); return
@@ -293,24 +293,36 @@ router.post('/:slug', async (req: Request, res: Response, next: NextFunction) =>
     })
 
     // Cobrança de depósito PIX (se configurado)
+    type TenantPay = typeof tenant & {
+      paymentProvider: string | null
+      stripeSecretKey: string | null
+      abacatePayApiKey: string | null
+    }
+    const tenantPay = tenant as unknown as TenantPay
+
     let paymentData: { pixQrCode: string; pixQrCodeBase64: string | null; amount: number } | null = null
-    const needsDeposit = (tenant.paymentFlow === 'deposit' || tenant.paymentFlow === 'both')
-      && tenant.mpAccessToken
-      && service.price
-      && (tenant.depositPercent ?? 0) > 0
+    const provider = tenantPay.paymentProvider ?? 'mercadopago'
+    const hasKey = provider === 'stripe'     ? !!tenantPay.stripeSecretKey
+                 : provider === 'abacatepay' ? !!tenantPay.abacatePayApiKey
+                 : !!tenantPay.mpAccessToken
+    const needsDeposit = (tenantPay.paymentFlow === 'deposit' || tenantPay.paymentFlow === 'both')
+      && hasKey && service.price && (tenantPay.depositPercent ?? 0) > 0
 
     if (needsDeposit) {
       try {
-        const amount = Math.round((service.price! * (tenant.depositPercent! / 100)) * 100) / 100
+        const amount = Math.round((service.price! * (tenantPay.depositPercent! / 100)) * 100) / 100
         const payment = await createPixCharge({
-          tenantId:    tenant.id,
+          tenantId:      tenantPay.id,
           appointmentId: appointment.id,
-          type:        'deposit',
+          type:          'deposit',
           amount,
-          description: `Sinal — ${service.name}`,
-          payerEmail:  client.email ?? 'cliente@kired.com.br',
-          payerName:   client.name,
-          accessToken: tenant.mpAccessToken!,
+          description:   `Sinal — ${service.name}`,
+          payerEmail:    client.email ?? 'cliente@kired.com.br',
+          payerName:     client.name,
+          provider,
+          accessToken:   tenantPay.mpAccessToken    ?? undefined,
+          stripeKey:     tenantPay.stripeSecretKey  ?? undefined,
+          abacatePayKey: tenantPay.abacatePayApiKey ?? undefined,
         })
         paymentData = {
           pixQrCode:       payment.pixQrCode ?? '',

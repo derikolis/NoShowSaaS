@@ -22,7 +22,11 @@ const updateSchema = z.object({
   reminderTemplate:     z.string().min(10, 'Template muito curto').optional().nullable(),
   confirmationTemplate: z.string().min(10, 'Template muito curto').optional().nullable(),
   peakHours:            z.array(peakHourRangeSchema).optional().nullable(),
+  paymentProvider:      z.enum(['mercadopago', 'stripe', 'abacatepay']).optional().nullable(),
   mpAccessToken:        z.string().optional().nullable(),
+  stripeSecretKey:      z.string().optional().nullable(),
+  stripeWebhookSecret:  z.string().optional().nullable(),
+  abacatePayApiKey:     z.string().optional().nullable(),
   paymentFlow:          z.enum(['disabled', 'deposit', 'no_show_fee', 'both']).optional().nullable(),
   depositPercent:       z.number().int().min(1).max(100).optional().nullable(),
   noShowFee:            z.number().min(0).optional().nullable(),
@@ -34,8 +38,10 @@ function tenantFields(tenant: {
   evolutionApiKey: string | null; evolutionInstance: string | null
   reminderTemplate: string | null; confirmationTemplate: string | null
   peakHours: unknown
-  mpAccessToken: string | null; paymentFlow: string | null
-  depositPercent: number | null; noShowFee: number | null
+  paymentProvider: string | null
+  mpAccessToken: string | null; stripeSecretKey: string | null
+  stripeWebhookSecret: string | null; abacatePayApiKey: string | null
+  paymentFlow: string | null; depositPercent: number | null; noShowFee: number | null
 }) {
   return {
     name: tenant.name, slug: tenant.slug,
@@ -43,8 +49,10 @@ function tenantFields(tenant: {
     evolutionApiKey: tenant.evolutionApiKey, evolutionInstance: tenant.evolutionInstance,
     reminderTemplate: tenant.reminderTemplate, confirmationTemplate: tenant.confirmationTemplate,
     peakHours: tenant.peakHours,
-    mpAccessToken: tenant.mpAccessToken, paymentFlow: tenant.paymentFlow,
-    depositPercent: tenant.depositPercent, noShowFee: tenant.noShowFee,
+    paymentProvider: tenant.paymentProvider,
+    mpAccessToken: tenant.mpAccessToken, stripeSecretKey: tenant.stripeSecretKey,
+    stripeWebhookSecret: tenant.stripeWebhookSecret, abacatePayApiKey: tenant.abacatePayApiKey,
+    paymentFlow: tenant.paymentFlow, depositPercent: tenant.depositPercent, noShowFee: tenant.noShowFee,
   }
 }
 

@@ -20,7 +20,10 @@ type Settings = {
   reminderTemplate: string | null
   confirmationTemplate: string | null
   peakHours: PeakRange[] | null
+  paymentProvider: string | null
   mpAccessToken: string | null
+  stripeSecretKey: string | null
+  abacatePayApiKey: string | null
   paymentFlow: string | null
   depositPercent: number | null
   noShowFee: number | null
@@ -119,11 +122,14 @@ export default function SettingsPage() {
   const [savingPeak,  setSavingPeak]  = useState(false)
 
   // Payment state
-  const [mpToken,        setMpToken]        = useState('')
-  const [paymentFlow,    setPaymentFlow]    = useState('disabled')
-  const [depositPercent, setDepositPercent] = useState(30)
-  const [noShowFee,      setNoShowFee]      = useState(0)
-  const [savingPayment,  setSavingPayment]  = useState(false)
+  const [paymentProvider, setPaymentProvider] = useState('abacatepay')
+  const [mpToken,         setMpToken]         = useState('')
+  const [stripeKey,       setStripeKey]       = useState('')
+  const [abacateKey,      setAbacateKey]      = useState('')
+  const [paymentFlow,     setPaymentFlow]     = useState('disabled')
+  const [depositPercent,  setDepositPercent]  = useState(30)
+  const [noShowFee,       setNoShowFee]       = useState(0)
+  const [savingPayment,   setSavingPayment]   = useState(false)
 
   // Test send
   const [testPhone, setTestPhone] = useState('')
@@ -159,7 +165,10 @@ export default function SettingsPage() {
       setReminderTpl(s.reminderTemplate ?? DEFAULT_REMINDER)
       setConfirmationTpl(s.confirmationTemplate ?? DEFAULT_CONFIRMATION)
       setPeakHours(s.peakHours ?? [{ start: 12, end: 14 }, { start: 18, end: 20 }])
+      setPaymentProvider(s.paymentProvider ?? 'abacatepay')
       setMpToken(s.mpAccessToken ?? '')
+      setStripeKey(s.stripeSecretKey ?? '')
+      setAbacateKey(s.abacatePayApiKey ?? '')
       setPaymentFlow(s.paymentFlow ?? 'disabled')
       setDepositPercent(s.depositPercent ?? 30)
       setNoShowFee(s.noShowFee ?? 0)
@@ -231,8 +240,11 @@ export default function SettingsPage() {
     e.preventDefault(); setSavingPayment(true)
     try {
       await api.put('/settings', {
-        mpAccessToken:  mpToken  || null,
-        paymentFlow:    paymentFlow,
+        paymentProvider,
+        mpAccessToken:    paymentProvider === 'mercadopago' ? (mpToken || null) : null,
+        stripeSecretKey:  paymentProvider === 'stripe'      ? (stripeKey || null) : null,
+        abacatePayApiKey: paymentProvider === 'abacatepay'  ? (abacateKey || null) : null,
+        paymentFlow,
         depositPercent: paymentFlow === 'deposit' || paymentFlow === 'both' ? depositPercent : null,
         noShowFee:      paymentFlow === 'no_show_fee' || paymentFlow === 'both' ? noShowFee : null,
       })
@@ -613,19 +625,57 @@ export default function SettingsPage() {
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Pagamentos</h2>
           <p className="text-sm text-gray-500 mt-1">
-            Configure cobranças via PIX com Mercado Pago. O cliente paga direto pelo link — sem mensalidade, só por transação.
+            Configure cobranças via PIX. Escolha o provedor e informe suas credenciais — sem custo fixo, só por transação.
           </p>
         </div>
 
-        <Field label="Access Token do Mercado Pago" hint="Encontre em mercadopago.com.br → Seu negócio → Credenciais → Access Token de produção.">
-          <input
-            type="password"
-            value={mpToken}
-            onChange={e => setMpToken(e.target.value)}
-            placeholder="APP_USR-••••••••••••••••"
+        <Field label="Provedor de pagamento">
+          <select
+            value={paymentProvider}
+            onChange={e => setPaymentProvider(e.target.value)}
             className={inputCls}
-          />
+          >
+            <option value="abacatepay">AbacatePay (recomendado)</option>
+            <option value="mercadopago">Mercado Pago</option>
+            <option value="stripe">Stripe</option>
+          </select>
         </Field>
+
+        {paymentProvider === 'abacatepay' && (
+          <Field label="API Key do AbacatePay" hint="Encontre em app.abacatepay.com → Configurações → API Keys.">
+            <input
+              type="password"
+              value={abacateKey}
+              onChange={e => setAbacateKey(e.target.value)}
+              placeholder="abacate_live_••••••••••••••••"
+              className={inputCls}
+            />
+          </Field>
+        )}
+
+        {paymentProvider === 'mercadopago' && (
+          <Field label="Access Token do Mercado Pago" hint="Encontre em mercadopago.com.br → Seu negócio → Credenciais → Access Token de produção.">
+            <input
+              type="password"
+              value={mpToken}
+              onChange={e => setMpToken(e.target.value)}
+              placeholder="APP_USR-••••••••••••••••"
+              className={inputCls}
+            />
+          </Field>
+        )}
+
+        {paymentProvider === 'stripe' && (
+          <Field label="Secret Key do Stripe" hint="Encontre em dashboard.stripe.com → Developers → API Keys → Secret key.">
+            <input
+              type="password"
+              value={stripeKey}
+              onChange={e => setStripeKey(e.target.value)}
+              placeholder="sk_live_••••••••••••••••"
+              className={inputCls}
+            />
+          </Field>
+        )}
 
         <Field label="Fluxo de pagamento">
           <select
@@ -654,7 +704,7 @@ export default function SettingsPage() {
         )}
 
         {(paymentFlow === 'no_show_fee' || paymentFlow === 'both') && (
-          <Field label="Valor da taxa de no-show (R$)" hint="Valor fixo cobrado quando o cliente não comparece.">
+          <Field label="Valor da taxa de no-show (R$)" hint="Valor fixo cobrado quando o cliente não comparecer.">
             <input
               type="number"
               min={0}
@@ -676,8 +726,10 @@ export default function SettingsPage() {
               {(paymentFlow === 'no_show_fee' || paymentFlow === 'both') && (
                 <li>Ao marcar no-show, o sistema gera PIX e envia via WhatsApp ao cliente</li>
               )}
-              <li>Pagamentos confirmados pelo Mercado Pago em tempo real via webhook</li>
-              <li>Mercado Pago cobra ~1,49% por transação PIX — sem custo fixo</li>
+              <li>Pagamentos confirmados em tempo real via webhook</li>
+              {paymentProvider === 'abacatepay'  && <li>AbacatePay cobra taxa por transação PIX — sem custo fixo</li>}
+              {paymentProvider === 'mercadopago' && <li>Mercado Pago cobra ~1,49% por transação PIX — sem custo fixo</li>}
+              {paymentProvider === 'stripe'      && <li>Stripe cobra ~2,9% + R$0,30 por transação — PIX requer confirmação</li>}
             </ul>
           </div>
         )}
@@ -762,7 +814,7 @@ export default function SettingsPage() {
           </nav>
 
           {/* ── Right content ─────────────────────────────────────────────────── */}
-          <div className="flex-1 bg-white rounded-xl border border-gray-200 px-8 py-7 min-h-[400px]">
+          <div className="flex-1 bg-white rounded-xl border border-gray-200 px-8 py-7 min-h-100">
             {sections[active]}
           </div>
         </div>

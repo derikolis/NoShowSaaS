@@ -21,7 +21,11 @@ model Tenant {
   reminderTemplate     String?
   confirmationTemplate String?
   peakHours            Json?
+  paymentProvider      String?   // mercadopago | stripe | abacatepay
   mpAccessToken        String?
+  stripeSecretKey      String?
+  stripeWebhookSecret  String?
+  abacatePayApiKey     String?
   paymentFlow          String?   // disabled | deposit | no_show_fee | both
   depositPercent       Int?
   noShowFee            Float?
