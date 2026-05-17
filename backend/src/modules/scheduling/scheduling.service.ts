@@ -106,8 +106,22 @@ export async function confirmAppointment(tenantId: string, id: string) {
     where: { id },
     data: { status: 'confirmed', confirmedAt: new Date() },
   })
+  recalculateClientScore(tenantId, existing.clientId).catch(() => null)
   audit({ tenantId, action: 'confirm', entity: 'appointment', entityId: id })
   return confirmed
+}
+
+export async function markCompleted(tenantId: string, id: string) {
+  const existing = await prisma.appointment.findFirst({ where: { id, tenantId } })
+  if (!existing) throw new Error('Agendamento não encontrado')
+
+  const updated = await prisma.appointment.update({
+    where: { id },
+    data: { status: 'completed' },
+  })
+  recalculateClientScore(tenantId, existing.clientId).catch(() => null)
+  audit({ tenantId, action: 'complete', entity: 'appointment', entityId: id })
+  return updated
 }
 
 export async function rescheduleAppointment(tenantId: string, id: string, newScheduledAt: Date) {

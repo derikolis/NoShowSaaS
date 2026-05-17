@@ -25,6 +25,67 @@ function signClientToken(client: { id: string; name: string; phone: string }, te
   )
 }
 
+// ── Confirmação via link do WhatsApp ─────────────────────────────────────────
+function confirmHtml(title: string, message: string, scheduledAt?: Date): string {
+  const dateStr = scheduledAt
+    ? scheduledAt.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }) +
+      ' às ' + scheduledAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    : ''
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${title} — Kired</title>
+<style>body{font-family:system-ui,sans-serif;background:#f8fafc;min-height:100vh;display:flex;align-items:center;justify-content:center;margin:0}
+.card{background:#fff;border-radius:16px;padding:40px 32px;text-align:center;max-width:360px;box-shadow:0 4px 24px rgba(0,0,0,.08)}
+h1{font-size:1.4rem;margin:0 0 8px;color:#1e293b}p{color:#64748b;margin:0 0 4px;font-size:.95rem}
+.date{color:#4f46e5;font-weight:600;font-size:1rem;margin-top:12px}.brand{color:#94a3b8;font-size:.75rem;margin-top:24px}</style>
+</head><body><div class="card"><h1>${message}</h1>
+${dateStr ? `<p class="date">${dateStr}</p>` : ''}
+<p class="brand">Powered by Kired</p></div></body></html>`
+}
+
+router.get('/:slug/confirmar/:token', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    let payload: { type: string; appointmentId: string; tenantId: string }
+    try {
+      payload = jwt.verify(req.params.token as string, process.env.JWT_SECRET!) as typeof payload
+    } catch {
+      res.status(400).send(confirmHtml('Link inválido', '❌ Este link expirou ou é inválido.')); return
+    }
+
+    if (payload.type !== 'confirm') {
+      res.status(400).send(confirmHtml('Link inválido', '❌ Link inválido.')); return
+    }
+
+    const tenant = await prisma.tenant.findUnique({
+      where: { slug: req.params.slug as string },
+      select: { id: true, status: true },
+    })
+    if (!tenant || tenant.id !== payload.tenantId) {
+      res.status(404).send(confirmHtml('Não encontrado', '❌ Empresa não encontrada.')); return
+    }
+
+    const appointment = await prisma.appointment.findFirst({
+      where: { id: payload.appointmentId, tenantId: tenant.id },
+    })
+    if (!appointment) {
+      res.status(404).send(confirmHtml('Não encontrado', '❌ Agendamento não encontrado.')); return
+    }
+    if (appointment.status === 'cancelled') {
+      res.send(confirmHtml('Cancelado', '❌ Este agendamento foi cancelado.')); return
+    }
+    if (appointment.status === 'confirmed' || appointment.status === 'completed') {
+      res.send(confirmHtml('Já confirmado', '✅ Sua presença já estava confirmada!', appointment.scheduledAt)); return
+    }
+
+    await prisma.appointment.update({
+      where: { id: appointment.id },
+      data: { status: 'confirmed', confirmedAt: new Date() },
+    })
+
+    res.send(confirmHtml('Presença confirmada!', '✅ Obrigado! Sua presença foi confirmada.', appointment.scheduledAt))
+  } catch (err) { next(err) }
+})
+
 // ── Info pública do tenant ───────────────────────────────────────────────────
 router.get('/:slug', async (req: Request, res: Response, next: NextFunction) => {
   try {

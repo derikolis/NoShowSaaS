@@ -73,11 +73,21 @@ export async function calculateScore(tenantId: string, clientId: string, schedul
 }
 
 export async function recalculateClientScore(tenantId: string, clientId: string): Promise<void> {
-  const noShows = await prisma.appointment.count({ where: { tenantId, clientId, status: 'no_show' } })
+  const [noShows, completions, confirmations] = await Promise.all([
+    prisma.appointment.count({ where: { tenantId, clientId, status: 'no_show' } }),
+    prisma.appointment.count({ where: { tenantId, clientId, status: 'completed' } }),
+    prisma.appointment.count({ where: { tenantId, clientId, status: 'confirmed' } }),
+  ])
 
   let score = 0
-  if (noShows === 1) score = POINTS.NO_SHOW_ONCE
-  else if (noShows >= 2) score = POINTS.NO_SHOW_MULTIPLE
+  if (noShows === 1) score += POINTS.NO_SHOW_ONCE
+  else if (noShows >= 2) score += POINTS.NO_SHOW_MULTIPLE
+
+  // Cada comparecimento e confirmação reduz o risco
+  score -= completions * 10
+  score -= confirmations * 5
+
+  score = Math.max(0, Math.min(100, score))
 
   await prisma.client.update({ where: { id: clientId }, data: { riskScore: score } })
 }

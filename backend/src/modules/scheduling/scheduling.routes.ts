@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express'
 import { z } from 'zod'
 import { authMiddleware, requireRole } from '../../shared/middlewares/auth.middleware'
-import { listAppointments, getAppointment, createAppointment, cancelAppointment, confirmAppointment, markNoShow, rescheduleAppointment } from './scheduling.service'
+import { listAppointments, getAppointment, createAppointment, cancelAppointment, confirmAppointment, markNoShow, markCompleted, rescheduleAppointment } from './scheduling.service'
 import { ok, fail } from '../../shared/types/api'
 import { chargeNoShowFee } from '../payments/payments.service'
 
@@ -104,9 +104,20 @@ router.patch('/:id/reschedule', async (req: Request, res: Response, next: NextFu
 router.patch('/:id/no-show', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const appointment = await markNoShow(req.tenantId, String(req.params.id))
-    // Dispara cobrança de no-show em background (não bloqueia resposta)
     chargeNoShowFee(appointment.id, req.tenantId).catch(() => null)
     res.json(ok(appointment, 'Marcado como no-show'))
+  } catch (err) {
+    if (err instanceof Error && err.message === 'Agendamento não encontrado') {
+      res.status(404).json(fail(err.message)); return
+    }
+    next(err)
+  }
+})
+
+router.patch('/:id/complete', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const appointment = await markCompleted(req.tenantId, String(req.params.id))
+    res.json(ok(appointment, 'Agendamento marcado como realizado'))
   } catch (err) {
     if (err instanceof Error && err.message === 'Agendamento não encontrado') {
       res.status(404).json(fail(err.message)); return

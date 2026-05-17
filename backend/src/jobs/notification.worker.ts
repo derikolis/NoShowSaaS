@@ -5,6 +5,7 @@ import {
   sendWhatsAppButtons,
   buildReminderMessage,
   buildConfirmationMessage,
+  buildConfirmLink,
   APPOINTMENT_BUTTONS,
   CONFIRM_ONLY_BUTTONS,
   getTenantWhatsAppConfig,
@@ -24,13 +25,15 @@ const worker = new Worker('notifications', async (job) => {
     })
     if (!appointment || appointment.status === 'cancelled') return
 
-    const [cfg, { reminderTemplate }, professional] = await Promise.all([
+    const [cfg, { reminderTemplate }, professional, tenant] = await Promise.all([
       getTenantWhatsAppConfig(tenantId),
       getTenantTemplates(tenantId),
       prisma.user.findUnique({ where: { id: appointment.professionalId }, select: { name: true } }),
+      prisma.tenant.findUnique({ where: { id: tenantId }, select: { slug: true } }),
     ])
     const professionalName = professional?.name ?? 'Profissional'
-    const body = buildReminderMessage(appointment.client.name, professionalName, appointment.scheduledAt, reminderTemplate)
+    const confirmLink = tenant ? buildConfirmLink(tenant.slug, appointment.id, tenantId) : null
+    const body = buildReminderMessage(appointment.client.name, professionalName, appointment.scheduledAt, confirmLink, reminderTemplate)
     await sendWhatsAppButtons(appointment.client.phone, 'Lembrete de Agendamento', body, APPOINTMENT_BUTTONS, cfg)
 
     await prisma.notification.updateMany({

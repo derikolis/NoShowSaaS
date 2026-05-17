@@ -1,3 +1,4 @@
+import jwt from 'jsonwebtoken'
 import prisma from '../../shared/utils/prisma'
 import { notificationQueue } from '../../jobs/queues'
 import type { RiskLevel } from '../risk-engine/risk.service'
@@ -117,16 +118,25 @@ export async function sendWhatsAppButtons(
   await sendWhatsApp(phone, `${body}\n\n${opts}`, config)
 }
 
+export function buildConfirmLink(slug: string, appointmentId: string, tenantId: string): string {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const token = jwt.sign({ type: 'confirm', appointmentId, tenantId }, process.env.JWT_SECRET!, { expiresIn: '7d' } as any)
+  const base = (process.env.FRONTEND_URL ?? 'https://kired.com.br').split(',')[0].trim()
+  return `${base}/agendar/${slug}/confirmar/${token}`
+}
+
 export function buildReminderMessage(
   clientName: string,
   professionalName: string,
   scheduledAt: Date,
+  confirmLink?: string | null,
   template?: string | null,
 ): string {
   const hora = scheduledAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   const data = scheduledAt.toLocaleDateString('pt-BR')
   const tpl = template ?? DEFAULT_REMINDER_TEMPLATE
-  return applyTemplate(tpl, { nome: clientName, hora, profissional: professionalName, data })
+  const msg = applyTemplate(tpl, { nome: clientName, hora, profissional: professionalName, data })
+  return confirmLink ? `${msg}\n\n✅ Confirmar presença: ${confirmLink}` : msg
 }
 
 export function buildConfirmationMessage(
