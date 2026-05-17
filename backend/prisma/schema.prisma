@@ -36,6 +36,8 @@ model User {
   email        String
   passwordHash String
   role         String
+  weekSchedule Json?
+  photoUrl     String?
   createdAt    DateTime @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id])

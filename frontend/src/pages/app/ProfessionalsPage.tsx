@@ -1,12 +1,17 @@
-import { useEffect, useState, useCallback, FormEvent } from 'react'
-import { X, Mail, Calendar, UsersRound, Search, ShieldCheck, Pencil } from 'lucide-react'
+import { useEffect, useState, useCallback, useRef, FormEvent, ChangeEvent } from 'react'
+import { X, Mail, Calendar, UsersRound, Search, ShieldCheck, Pencil, Plus, Trash2, Camera } from 'lucide-react'
 import Layout from '../../components/Layout'
 import api from '../../services/api'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+type TimeSlot = { start: string; end: string }
+type WeekSchedule = Record<string, TimeSlot[]>
+
 interface TeamMember {
   id: string; name: string; email: string; role: string; createdAt: string
+  weekSchedule?: WeekSchedule | null
+  photoUrl?: string | null
 }
 
 interface UserMetrics {
@@ -27,6 +32,120 @@ const ROLE_CLASS: Record<string, string> = {
   employee:     'bg-gray-100 text-gray-600',
 }
 
+const DAYS = [
+  { key: 'mon', label: 'Segunda' },
+  { key: 'tue', label: 'Terça'   },
+  { key: 'wed', label: 'Quarta'  },
+  { key: 'thu', label: 'Quinta'  },
+  { key: 'fri', label: 'Sexta'   },
+  { key: 'sat', label: 'Sábado'  },
+  { key: 'sun', label: 'Domingo' },
+]
+
+const EMPTY_SCHEDULE: WeekSchedule = { mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [] }
+
+// ─── Schedule Editor ──────────────────────────────────────────────────────────
+
+function ScheduleEditor({
+  schedule, onChange,
+}: {
+  schedule: WeekSchedule
+  onChange: (s: WeekSchedule) => void
+}) {
+  function toggleDay(key: string) {
+    const active = (schedule[key] ?? []).length > 0
+    onChange({ ...schedule, [key]: active ? [] : [{ start: '08:00', end: '18:00' }] })
+  }
+
+  function addSlot(key: string) {
+    const slots = schedule[key] ?? []
+    onChange({ ...schedule, [key]: [...slots, { start: '08:00', end: '18:00' }] })
+  }
+
+  function removeSlot(key: string, idx: number) {
+    const slots = (schedule[key] ?? []).filter((_, i) => i !== idx)
+    onChange({ ...schedule, [key]: slots })
+  }
+
+  function updateSlot(key: string, idx: number, field: 'start' | 'end', value: string) {
+    const slots = (schedule[key] ?? []).map((s, i) => i === idx ? { ...s, [field]: value } : s)
+    onChange({ ...schedule, [key]: slots })
+  }
+
+  return (
+    <div className="space-y-1">
+      {DAYS.map(({ key, label }) => {
+        const slots = schedule[key] ?? []
+        const active = slots.length > 0
+        return (
+          <div key={key} className="rounded-lg border border-gray-100 overflow-hidden">
+            {/* Day header */}
+            <div className="flex items-center justify-between px-3 py-2 bg-gray-50">
+              <button
+                type="button"
+                onClick={() => toggleDay(key)}
+                className="flex items-center gap-2 cursor-pointer group"
+              >
+                <div className={`w-8 h-4 rounded-full transition-colors relative ${active ? 'bg-indigo-500' : 'bg-gray-300'}`}>
+                  <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${active ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                </div>
+                <span className={`text-xs font-medium w-14 ${active ? 'text-gray-800' : 'text-gray-400'}`}>{label}</span>
+              </button>
+              {active && (
+                <button
+                  type="button"
+                  onClick={() => addSlot(key)}
+                  className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 cursor-pointer"
+                >
+                  <Plus size={12} /> Período
+                </button>
+              )}
+            </div>
+
+            {/* Slots */}
+            {active && (
+              <div className="px-3 py-2 space-y-1.5">
+                {slots.map((slot, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <input
+                      type="time"
+                      value={slot.start}
+                      onChange={e => updateSlot(key, idx, 'start', e.target.value)}
+                      className="flex-1 border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                    />
+                    <span className="text-xs text-gray-400">–</span>
+                    <input
+                      type="time"
+                      value={slot.end}
+                      onChange={e => updateSlot(key, idx, 'end', e.target.value)}
+                      className="flex-1 border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeSlot(key, idx)}
+                      className="text-gray-300 hover:text-red-400 cursor-pointer"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ))}
+                {slots.length > 1 && (
+                  <p className="text-[10px] text-gray-400 pt-0.5">
+                    Pausas entre períodos ficam indisponíveis no link público.
+                  </p>
+                )}
+              </div>
+            )}
+            {!active && (
+              <p className="px-3 py-1.5 text-[11px] text-gray-400">Indisponível</p>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── Member Drawer ────────────────────────────────────────────────────────────
 
 function MemberDrawer({
@@ -38,16 +157,22 @@ function MemberDrawer({
   onDeleted: () => void
   showToast: (msg: string) => void
 }) {
-  const [confirming, setConfirming] = useState(false)
-  const [removing,   setRemoving]   = useState(false)
-  const [editing,    setEditing]    = useState(false)
-  const [saving,     setSaving]     = useState(false)
-  const [editName,   setEditName]   = useState(member.name)
-  const [editEmail,  setEditEmail]  = useState(member.email)
-  const [editRole,   setEditRole]   = useState(member.role as 'receptionist' | 'employee')
-  const [editPass,   setEditPass]   = useState('')
+  const [confirming,    setConfirming]    = useState(false)
+  const [removing,      setRemoving]      = useState(false)
+  const [editing,       setEditing]       = useState(false)
+  const [saving,        setSaving]        = useState(false)
+  const [savingPhoto,   setSavingPhoto]   = useState(false)
+  const [savingSchedule, setSavingSchedule] = useState(false)
+  const [editName,      setEditName]      = useState(member.name)
+  const [editEmail,     setEditEmail]     = useState(member.email)
+  const [editRole,      setEditRole]      = useState(member.role as 'receptionist' | 'employee')
+  const [editPass,      setEditPass]      = useState('')
+  const [schedule,      setSchedule]      = useState<WeekSchedule>(
+    (member.weekSchedule as WeekSchedule) ?? { ...EMPTY_SCHEDULE }
+  )
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const inputCls = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white'
+  const inputCls  = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white'
   const initials  = member.name.split(' ').filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase()
   const createdAt = new Date(member.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
 
@@ -64,6 +189,37 @@ function MemberDrawer({
       const status = (err as { response?: { status?: number } })?.response?.status
       showToast(status === 409 ? 'Email já em uso' : 'Erro ao atualizar')
     } finally { setSaving(false) }
+  }
+
+  async function handlePhotoChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setSavingPhoto(true)
+    try {
+      const reader = new FileReader()
+      reader.onload = async ev => {
+        const photoUrl = ev.target?.result as string
+        const { data } = await api.put(`/users/${member.id}`, { photoUrl })
+        showToast('Foto atualizada')
+        onUpdated(data.data)
+        setSavingPhoto(false)
+      }
+      reader.readAsDataURL(file)
+    } catch {
+      showToast('Erro ao salvar foto')
+      setSavingPhoto(false)
+    }
+  }
+
+  async function handleSaveSchedule() {
+    setSavingSchedule(true)
+    try {
+      const { data } = await api.put(`/users/${member.id}`, { weekSchedule: schedule })
+      showToast('Horários salvos')
+      onUpdated(data.data)
+    } catch {
+      showToast('Erro ao salvar horários')
+    } finally { setSavingSchedule(false) }
   }
 
   async function handleRemove() {
@@ -86,9 +242,43 @@ function MemberDrawer({
         {/* Header */}
         <div className="flex items-start justify-between px-6 py-5 border-b border-gray-100">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-sm font-bold text-indigo-700 shrink-0">
-              {initials}
+            {/* Avatar — clicável para trocar foto */}
+            <div className="relative shrink-0 group">
+              {member.photoUrl ? (
+                <img
+                  src={member.photoUrl}
+                  alt={member.name}
+                  className="w-12 h-12 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center text-sm font-bold text-indigo-700">
+                  {initials}
+                </div>
+              )}
+              {member.role !== 'owner' && (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={savingPhoto}
+                  className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer"
+                  title="Trocar foto"
+                >
+                  {savingPhoto ? (
+                    <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Camera size={14} className="text-white" />
+                  )}
+                </button>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handlePhotoChange}
+              />
             </div>
+
             <div>
               <h2 className="text-base font-semibold text-gray-900 leading-tight">{member.name}</h2>
               <span className={`text-xs font-medium px-2 py-0.5 rounded-full mt-1 inline-block ${ROLE_CLASS[member.role] ?? 'bg-gray-100 text-gray-600'}`}>
@@ -154,6 +344,25 @@ function MemberDrawer({
                 )}
               </div>
             )}
+          </div>
+
+          {/* Weekly Schedule */}
+          <div className="px-6 py-5 border-b border-gray-100">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Horários da semana</p>
+                <p className="text-[11px] text-gray-400 mt-0.5">Adicione múltiplos períodos por dia. Pausas ficam indisponíveis no link público.</p>
+              </div>
+            </div>
+            <ScheduleEditor schedule={schedule} onChange={setSchedule} />
+            <button
+              type="button"
+              onClick={handleSaveSchedule}
+              disabled={savingSchedule}
+              className="mt-3 w-full py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-lg cursor-pointer transition-colors"
+            >
+              {savingSchedule ? 'Salvando...' : 'Salvar horários'}
+            </button>
           </div>
 
           {/* Permissions */}
@@ -311,9 +520,17 @@ function MemberCard({
       {/* Top: avatar + name + role */}
       <div className="flex items-start gap-3 mb-4">
         <div className="relative shrink-0">
-          <div className="w-11 h-11 rounded-full bg-indigo-100 flex items-center justify-center text-sm font-bold text-indigo-700">
-            {initials}
-          </div>
+          {member.photoUrl ? (
+            <img
+              src={member.photoUrl}
+              alt={member.name}
+              className="w-11 h-11 rounded-full object-cover"
+            />
+          ) : (
+            <div className="w-11 h-11 rounded-full bg-indigo-100 flex items-center justify-center text-sm font-bold text-indigo-700">
+              {initials}
+            </div>
+          )}
           {metrics && metrics.today > 0 && (
             <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-white" title="Com agenda hoje" />
           )}

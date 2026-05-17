@@ -59,7 +59,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const users = await prisma.user.findMany({
       where: { tenantId: req.tenantId },
-      select: { id: true, name: true, email: true, role: true, createdAt: true },
+      select: { id: true, name: true, email: true, role: true, weekSchedule: true, photoUrl: true, createdAt: true },
       orderBy: { createdAt: 'asc' },
     })
     res.json(ok(users))
@@ -92,10 +92,12 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
 })
 
 const updateSchema = z.object({
-  name:     z.string().min(2).optional(),
-  email:    z.string().email().optional(),
-  password: z.string().min(6).optional(),
-  role:     z.enum(['receptionist', 'employee']).optional(),
+  name:         z.string().min(2).optional(),
+  email:        z.string().email().optional(),
+  password:     z.string().min(6).optional(),
+  role:         z.enum(['receptionist', 'employee']).optional(),
+  weekSchedule: z.record(z.string(), z.array(z.object({ start: z.string(), end: z.string() }))).optional().nullable(),
+  photoUrl:     z.string().optional().nullable(),
 })
 
 router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
@@ -115,15 +117,17 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
     }
 
     const data: Record<string, unknown> = {}
-    if (body.name)     data.name         = body.name
-    if (body.email)    data.email        = body.email
-    if (body.role)     data.role         = body.role
-    if (body.password) data.passwordHash = await hash(body.password, 10)
+    if (body.name)                       data.name         = body.name
+    if (body.email)                      data.email        = body.email
+    if (body.role)                       data.role         = body.role
+    if (body.password)                   data.passwordHash = await hash(body.password, 10)
+    if (body.weekSchedule !== undefined) data.weekSchedule = body.weekSchedule
+    if (body.photoUrl     !== undefined) data.photoUrl     = body.photoUrl
 
     const updated = await prisma.user.update({
       where: { id },
       data,
-      select: { id: true, name: true, email: true, role: true, createdAt: true },
+      select: { id: true, name: true, email: true, role: true, weekSchedule: true, photoUrl: true, createdAt: true },
     })
     res.json(ok(updated, 'Usuário atualizado'))
   } catch (err) { next(err) }
