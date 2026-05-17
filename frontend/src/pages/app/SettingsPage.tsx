@@ -207,7 +207,10 @@ export default function SettingsPage() {
       const { data } = await api.get('/settings/whatsapp/qrcode')
       if (data.data?.base64 || data.data?.code) { setQrData(data.data); setPolling(true) }
       else showToast('error', 'QR ainda não disponível. Aguarde alguns segundos.')
-    } catch { showToast('error', 'Evolution API indisponível.') }
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      showToast('error', msg ?? 'Evolution API indisponível.')
+    }
     finally { setLoadingQr(false) }
   }
 
@@ -415,6 +418,16 @@ export default function SettingsPage() {
                 <button onClick={handleShowQr} className="text-xs text-indigo-600 hover:text-indigo-800 cursor-pointer">
                   Gerar novo QR
                 </button>
+              </>
+            ) : waStatus?.state === 'not_configured' ? (
+              <>
+                <div className="w-12 h-12 bg-amber-50 border border-amber-200 rounded-full flex items-center justify-center">
+                  <Smartphone size={22} className="text-amber-400" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-medium text-gray-700">Evolution API não configurada</p>
+                  <p className="text-sm text-gray-400 mt-1">Preencha a URL, API Key e nome da instância abaixo antes de conectar.</p>
+                </div>
               </>
             ) : (
               <>
