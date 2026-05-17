@@ -123,7 +123,7 @@ router.get('/:slug/client', async (req: Request, res: Response, next: NextFuncti
 
     if (!found) { res.json(ok(null)); return }
 
-    res.json(ok({ name: found.name, hasAccount: !!found.passwordHash }))
+    res.json(ok({ name: found.name, hasAccount: !!(found as unknown as { passwordHash: string | null }).passwordHash }))
   } catch (err) { next(err) }
 })
 
@@ -154,7 +154,7 @@ router.post('/:slug/register', async (req: Request, res: Response, next: NextFun
       where: { tenantId: tenant.id, phone: body.phone },
     })
 
-    if (existing?.passwordHash) {
+    if ((existing as unknown as { passwordHash: string | null } | null)?.passwordHash) {
       res.status(409).json(fail('Telefone já cadastrado. Faça login.')); return
     }
 
@@ -206,17 +206,19 @@ router.post('/:slug/login', async (req: Request, res: Response, next: NextFuncti
       where: { tenantId: tenant.id, phone: body.phone },
     })
 
-    if (!client?.passwordHash) {
+    type ClientWithHash = typeof client & { passwordHash: string | null }
+    const clientTyped = client as ClientWithHash
+    if (!clientTyped?.passwordHash) {
       res.status(401).json(fail('Conta não encontrada. Cadastre-se.')); return
     }
 
-    const valid = await compare(body.password, client.passwordHash)
+    const valid = await compare(body.password, clientTyped.passwordHash)
     if (!valid) {
       res.status(401).json(fail('Senha incorreta.')); return
     }
 
-    const token = signClientToken(client, tenant.id)
-    res.json(ok({ token, client: { name: client.name } }, 'Login realizado'))
+    const token = signClientToken(client!, tenant.id)
+    res.json(ok({ token, client: { name: client!.name } }, 'Login realizado'))
   } catch (err) { next(err) }
 })
 
