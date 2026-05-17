@@ -24,11 +24,13 @@ const worker = new Worker('notifications', async (job) => {
     })
     if (!appointment || appointment.status === 'cancelled') return
 
-    const [cfg, { reminderTemplate }] = await Promise.all([
+    const [cfg, { reminderTemplate }, professional] = await Promise.all([
       getTenantWhatsAppConfig(tenantId),
       getTenantTemplates(tenantId),
+      prisma.user.findUnique({ where: { id: appointment.professionalId }, select: { name: true } }),
     ])
-    const body = buildReminderMessage(appointment.client.name, appointment.professionalId, appointment.scheduledAt, reminderTemplate)
+    const professionalName = professional?.name ?? 'Profissional'
+    const body = buildReminderMessage(appointment.client.name, professionalName, appointment.scheduledAt, reminderTemplate)
     await sendWhatsAppButtons(appointment.client.phone, 'Lembrete de Agendamento', body, APPOINTMENT_BUTTONS, cfg)
 
     await prisma.notification.updateMany({
