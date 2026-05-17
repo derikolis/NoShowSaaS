@@ -1,5 +1,5 @@
 import { useEffect, useState, FormEvent } from 'react'
-import { Plus, Search, Building2, CheckCircle2, XCircle, ShieldOff, X, Trash2, AlertTriangle } from 'lucide-react'
+import { Plus, Search, Building2, CheckCircle2, XCircle, ShieldOff, X, Trash2, AlertTriangle, KeyRound, Megaphone } from 'lucide-react'
 import AdminLayout from './AdminLayout'
 import adminApi from '../../services/adminApi'
 
@@ -73,6 +73,13 @@ export default function AdminTenantsPage() {
   const [deleteTarget,  setDeleteTarget]  = useState<Tenant | null>(null)
   const [deleting,      setDeleting]      = useState(false)
   const [changingPlan,  setChangingPlan]  = useState<string | null>(null)
+  const [resetTarget,    setResetTarget]    = useState<Tenant | null>(null)
+  const [resetPassword,  setResetPassword]  = useState('')
+  const [resetting,      setResetting]      = useState(false)
+  const [broadcastOpen,  setBroadcastOpen]  = useState(false)
+  const [bSubject,       setBSubject]       = useState('')
+  const [bMessage,       setBMessage]       = useState('')
+  const [broadcasting,   setBroadcasting]   = useState(false)
 
   // form state
   const [form, setForm] = useState({
@@ -141,6 +148,38 @@ export default function AdminTenantsPage() {
     }
   }
 
+  async function handleBroadcast(e: FormEvent) {
+    e.preventDefault()
+    setBroadcasting(true)
+    try {
+      const { data } = await adminApi.post('/admin/broadcast', { subject: bSubject, message: bMessage })
+      showToast(data.message ?? 'Broadcast enviado', 'success')
+      setBroadcastOpen(false)
+      setBSubject('')
+      setBMessage('')
+    } catch {
+      showToast('Erro ao enviar broadcast', 'error')
+    } finally {
+      setBroadcasting(false)
+    }
+  }
+
+  async function handleResetPassword(e: FormEvent) {
+    e.preventDefault()
+    if (!resetTarget) return
+    setResetting(true)
+    try {
+      await adminApi.post(`/admin/tenants/${resetTarget.id}/reset-password`, { password: resetPassword })
+      showToast('Senha redefinida com sucesso', 'success')
+      setResetTarget(null)
+      setResetPassword('')
+    } catch {
+      showToast('Erro ao redefinir senha', 'error')
+    } finally {
+      setResetting(false)
+    }
+  }
+
   async function handleStatusChange(id: string, status: 'active' | 'blocked') {
     try {
       await adminApi.patch(`/admin/tenants/${id}/status`, { status })
@@ -179,13 +218,22 @@ export default function AdminTenantsPage() {
             <h1 className="text-2xl font-bold text-white">Empresas</h1>
             <p className="text-slate-400 text-sm mt-1">{tenants.length} empresa{tenants.length !== 1 ? 's' : ''} cadastrada{tenants.length !== 1 ? 's' : ''}</p>
           </div>
-          <button
-            onClick={() => setDrawerOpen(true)}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors"
-          >
-            <Plus size={16} />
-            Nova empresa
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setBroadcastOpen(true)}
+              className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors"
+            >
+              <Megaphone size={16} />
+              Broadcast
+            </button>
+            <button
+              onClick={() => setDrawerOpen(true)}
+              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors"
+            >
+              <Plus size={16} />
+              Nova empresa
+            </button>
+          </div>
         </div>
 
         {/* ── Search ─────────────────────────────────────────────────────────── */}
@@ -274,6 +322,13 @@ export default function AdminTenantsPage() {
                           <ShieldOff size={16} />
                         </button>
                       )}
+                      <button
+                        onClick={() => { setResetTarget(t); setResetPassword('') }}
+                        title="Redefinir senha do owner"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-yellow-400 hover:bg-yellow-900/30 transition-colors"
+                      >
+                        <KeyRound size={16} />
+                      </button>
                       <button
                         onClick={() => setDeleteTarget(t)}
                         title="Excluir empresa"
@@ -382,6 +437,140 @@ export default function AdminTenantsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </>
+      )}
+
+      {/* ── Modal broadcast ──────────────────────────────────────────────── */}
+      {broadcastOpen && (
+        <>
+          <div className="fixed inset-0 bg-black/70 z-50" onClick={() => !broadcasting && setBroadcastOpen(false)} />
+          <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-lg p-6">
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-indigo-900/50 border border-indigo-700 flex items-center justify-center shrink-0">
+                    <Megaphone size={18} className="text-indigo-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold text-white">Broadcast</h3>
+                    <p className="text-xs text-slate-400 mt-0.5">Envia e-mail para todos os {tenants.length} owners cadastrados</p>
+                  </div>
+                </div>
+                <button onClick={() => setBroadcastOpen(false)} className="text-slate-500 hover:text-white transition-colors">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleBroadcast} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Assunto</label>
+                  <input
+                    type="text"
+                    value={bSubject}
+                    onChange={e => setBSubject(e.target.value)}
+                    placeholder="Ex: Manutenção programada — 20/06"
+                    required
+                    maxLength={200}
+                    autoFocus
+                    className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Mensagem</label>
+                  <textarea
+                    rows={6}
+                    value={bMessage}
+                    onChange={e => setBMessage(e.target.value)}
+                    placeholder="Escreva o comunicado aqui..."
+                    required
+                    maxLength={5000}
+                    className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                  />
+                  <p className="text-xs text-slate-500 mt-1 text-right">{bMessage.length}/5000</p>
+                </div>
+
+                <div className="bg-slate-800 border border-slate-700 rounded-lg px-4 py-3">
+                  <p className="text-xs text-slate-400">
+                    O e-mail será enviado para o endereço cadastrado de cada owner. Se o SMTP não estiver configurado no servidor, o envio será simulado no log.
+                  </p>
+                </div>
+
+                <div className="flex gap-3 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setBroadcastOpen(false)}
+                    disabled={broadcasting}
+                    className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 text-sm font-semibold rounded-lg transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={broadcasting}
+                    className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Megaphone size={14} />
+                    {broadcasting ? 'Enviando...' : `Enviar para ${tenants.length} owners`}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Modal reset de senha ─────────────────────────────────────────── */}
+      {resetTarget && (
+        <>
+          <div className="fixed inset-0 bg-black/70 z-50" onClick={() => !resetting && setResetTarget(null)} />
+          <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-sm p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-yellow-900/40 border border-yellow-800 flex items-center justify-center shrink-0">
+                  <KeyRound size={18} className="text-yellow-400" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-white">Redefinir senha</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">{resetTarget.name} · {resetTarget.ownerEmail}</p>
+                </div>
+              </div>
+
+              <form onSubmit={handleResetPassword} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Nova senha</label>
+                  <input
+                    type="password"
+                    value={resetPassword}
+                    onChange={e => setResetPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    minLength={6}
+                    autoFocus
+                    className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">Mínimo 6 caracteres.</p>
+                </div>
+                <div className="flex gap-3 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setResetTarget(null)}
+                    disabled={resetting}
+                    className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 text-sm font-semibold rounded-lg transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={resetting}
+                    className="flex-1 py-2.5 bg-yellow-600 hover:bg-yellow-500 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors"
+                  >
+                    {resetting ? 'Salvando...' : 'Redefinir'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </>
       )}

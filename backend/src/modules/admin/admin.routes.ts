@@ -112,6 +112,23 @@ router.get('/tenants/health', async (_req: Request, res: Response, next: NextFun
   } catch (err) { next(err) }
 })
 
+// GET /api/admin/audit
+router.get('/audit', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { tenantId, action, entity, dateFrom, dateTo, page, limit } = req.query
+    const data = await adminService.getAuditLogs({
+      tenantId: tenantId as string | undefined,
+      action:   action   as string | undefined,
+      entity:   entity   as string | undefined,
+      dateFrom: dateFrom ? new Date(dateFrom as string) : undefined,
+      dateTo:   dateTo   ? new Date(dateTo   as string) : undefined,
+      page:  page  ? parseInt(page  as string) : 1,
+      limit: limit ? parseInt(limit as string) : 50,
+    })
+    res.json(ok(data))
+  } catch (err) { next(err) }
+})
+
 // PATCH /api/admin/tenants/:id/status
 router.patch('/tenants/:id/status', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -135,6 +152,34 @@ router.patch('/tenants/:id/plan', async (req: Request, res: Response, next: Next
     res.json(ok(null, 'Plano atualizado'))
   } catch (err) {
     if (err instanceof Error && err.message === 'Empresa não encontrada') {
+      res.status(404).json(fail(err.message))
+      return
+    }
+    next(err)
+  }
+})
+
+// POST /api/admin/broadcast
+router.post('/broadcast', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { subject, message } = z.object({
+      subject: z.string().min(1).max(200),
+      message: z.string().min(1).max(5000),
+    }).parse(req.body)
+
+    const result = await adminService.broadcastToOwners(subject, message)
+    res.json(ok(result, `Enviado para ${result.sent} de ${result.total} owners`))
+  } catch (err) { next(err) }
+})
+
+// POST /api/admin/tenants/:id/reset-password
+router.post('/tenants/:id/reset-password', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { password } = z.object({ password: z.string().min(6) }).parse(req.body)
+    await adminService.resetOwnerPassword(req.params.id as string, password)
+    res.json(ok(null, 'Senha redefinida com sucesso'))
+  } catch (err) {
+    if (err instanceof Error && err.message === 'Owner não encontrado') {
       res.status(404).json(fail(err.message))
       return
     }

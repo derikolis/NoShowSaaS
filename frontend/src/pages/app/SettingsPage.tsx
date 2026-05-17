@@ -26,10 +26,12 @@ type Settings = {
   paymentProvider: string | null
   mpAccessToken: string | null
   stripeSecretKey: string | null
+  stripeWebhookSecret: string | null
   abacatePayApiKey: string | null
   paymentFlow: string | null
   depositPercent: number | null
   noShowFee: number | null
+  webhookUrls: { mercadopago: string; stripe: string; abacatepay: string } | null
 }
 
 const DEFAULT_REMINDER     = 'Olá {nome}.\nVocê tem um agendamento amanhã às {hora} com {profissional}.\nDeseja confirmar sua presença?'
@@ -128,14 +130,16 @@ export default function SettingsPage() {
   const [savingPeak,  setSavingPeak]  = useState(false)
 
   // Payment state
-  const [paymentProvider, setPaymentProvider] = useState('abacatepay')
-  const [mpToken,         setMpToken]         = useState('')
-  const [stripeKey,       setStripeKey]       = useState('')
-  const [abacateKey,      setAbacateKey]      = useState('')
-  const [paymentFlow,     setPaymentFlow]     = useState('disabled')
-  const [depositPercent,  setDepositPercent]  = useState(30)
-  const [noShowFee,       setNoShowFee]       = useState(0)
-  const [savingPayment,   setSavingPayment]   = useState(false)
+  const [paymentProvider,     setPaymentProvider]     = useState('')
+  const [mpToken,             setMpToken]             = useState('')
+  const [stripeKey,           setStripeKey]           = useState('')
+  const [stripeWebhookSecret, setStripeWebhookSecret] = useState('')
+  const [abacateKey,          setAbacateKey]          = useState('')
+  const [paymentFlow,         setPaymentFlow]         = useState('disabled')
+  const [depositPercent,      setDepositPercent]      = useState(30)
+  const [noShowFee,           setNoShowFee]           = useState(0)
+  const [savingPayment,       setSavingPayment]       = useState(false)
+  const [webhookUrls,         setWebhookUrls]         = useState<Settings['webhookUrls']>(null)
 
   // Test send
   const [testPhone, setTestPhone] = useState('')
@@ -174,13 +178,15 @@ export default function SettingsPage() {
       setReminder1Hours(s.reminder1Hours ?? 24)
       setReminder2Hours(s.reminder2Hours ?? 2)
       setPeakHours(s.peakHours ?? [{ start: 12, end: 14 }, { start: 18, end: 20 }])
-      setPaymentProvider(s.paymentProvider ?? 'abacatepay')
+      setPaymentProvider(s.paymentProvider ?? '')
       setMpToken(s.mpAccessToken ?? '')
       setStripeKey(s.stripeSecretKey ?? '')
+      setStripeWebhookSecret(s.stripeWebhookSecret ?? '')
       setAbacateKey(s.abacatePayApiKey ?? '')
       setPaymentFlow(s.paymentFlow ?? 'disabled')
       setDepositPercent(s.depositPercent ?? 30)
       setNoShowFee(s.noShowFee ?? 0)
+      setWebhookUrls(s.webhookUrls ?? null)
     })
   }, [fetchStatus])
 
@@ -255,13 +261,14 @@ export default function SettingsPage() {
     e.preventDefault(); setSavingPayment(true)
     try {
       await api.put('/settings', {
-        paymentProvider,
-        mpAccessToken:    paymentProvider === 'mercadopago' ? (mpToken || null) : null,
-        stripeSecretKey:  paymentProvider === 'stripe'      ? (stripeKey || null) : null,
-        abacatePayApiKey: paymentProvider === 'abacatepay'  ? (abacateKey || null) : null,
-        paymentFlow,
-        depositPercent: paymentFlow === 'deposit' || paymentFlow === 'both' ? depositPercent : null,
-        noShowFee:      paymentFlow === 'no_show_fee' || paymentFlow === 'both' ? noShowFee : null,
+        paymentProvider: paymentProvider || null,
+        mpAccessToken:       paymentProvider === 'mercadopago' ? (mpToken || null) : null,
+        stripeSecretKey:     paymentProvider === 'stripe'      ? (stripeKey || null) : null,
+        stripeWebhookSecret: paymentProvider === 'stripe'      ? (stripeWebhookSecret || null) : null,
+        abacatePayApiKey:    paymentProvider === 'abacatepay'  ? (abacateKey || null) : null,
+        paymentFlow:  paymentProvider ? paymentFlow : 'disabled',
+        depositPercent: paymentFlow === 'deposit'      || paymentFlow === 'both' ? depositPercent : null,
+        noShowFee:      paymentFlow === 'no_show_fee'  || paymentFlow === 'both' ? noShowFee      : null,
       })
       showToast('success', 'Configurações de pagamento salvas.')
     } catch { showToast('error', 'Erro ao salvar.') }
@@ -688,18 +695,21 @@ export default function SettingsPage() {
           </p>
         </div>
 
+        {/* ── Provedor ── */}
         <Field label="Provedor de pagamento">
           <select
             value={paymentProvider}
-            onChange={e => setPaymentProvider(e.target.value)}
+            onChange={e => { setPaymentProvider(e.target.value); if (!e.target.value) setPaymentFlow('disabled') }}
             className={inputCls}
           >
+            <option value="">Sem pagamento — desabilitado</option>
             <option value="abacatepay">AbacatePay (recomendado)</option>
             <option value="mercadopago">Mercado Pago</option>
             <option value="stripe">Stripe</option>
           </select>
         </Field>
 
+        {/* ── Credenciais por provedor ── */}
         {paymentProvider === 'abacatepay' && (
           <Field label="API Key do AbacatePay" hint="Encontre em app.abacatepay.com → Configurações → API Keys.">
             <input
@@ -724,7 +734,7 @@ export default function SettingsPage() {
           </Field>
         )}
 
-        {paymentProvider === 'stripe' && (
+        {paymentProvider === 'stripe' && (<>
           <Field label="Secret Key do Stripe" hint="Encontre em dashboard.stripe.com → Developers → API Keys → Secret key.">
             <input
               type="password"
@@ -734,64 +744,112 @@ export default function SettingsPage() {
               className={inputCls}
             />
           </Field>
-        )}
-
-        <Field label="Fluxo de pagamento">
-          <select
-            value={paymentFlow}
-            onChange={e => setPaymentFlow(e.target.value)}
-            className={inputCls}
-          >
-            <option value="disabled">Desabilitado — sem cobrança</option>
-            <option value="deposit">Sinal no agendamento — cliente paga % ao agendar</option>
-            <option value="no_show_fee">Taxa de no-show — cobra se não comparecer</option>
-            <option value="both">Ambos — sinal + taxa de no-show</option>
-          </select>
-        </Field>
-
-        {(paymentFlow === 'deposit' || paymentFlow === 'both') && (
-          <Field label="Percentual do sinal (%)" hint="Ex: 30 = cliente paga 30% do valor do serviço ao agendar.">
+          <Field label="Webhook Signing Secret do Stripe" hint="Encontre em Stripe Dashboard → Developers → Webhooks → seu endpoint → Signing secret.">
             <input
-              type="number"
-              min={1}
-              max={100}
-              value={depositPercent}
-              onChange={e => setDepositPercent(Number(e.target.value))}
+              type="password"
+              value={stripeWebhookSecret}
+              onChange={e => setStripeWebhookSecret(e.target.value)}
+              placeholder="whsec_••••••••••••••••"
               className={inputCls}
             />
           </Field>
-        )}
+        </>)}
 
-        {(paymentFlow === 'no_show_fee' || paymentFlow === 'both') && (
-          <Field label="Valor da taxa de no-show (R$)" hint="Valor fixo cobrado quando o cliente não comparecer.">
-            <input
-              type="number"
-              min={0}
-              step={0.01}
-              value={noShowFee}
-              onChange={e => setNoShowFee(Number(e.target.value))}
-              className={inputCls}
-            />
-          </Field>
-        )}
-
-        {paymentFlow !== 'disabled' && (
-          <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
-            <p className="text-sm font-semibold text-amber-800 mb-1">Como funciona</p>
-            <ul className="text-xs text-amber-700 space-y-1 list-disc list-inside">
-              {(paymentFlow === 'deposit' || paymentFlow === 'both') && (
-                <li>Após o agendamento, cliente recebe QR Code PIX para pagar o sinal</li>
-              )}
-              {(paymentFlow === 'no_show_fee' || paymentFlow === 'both') && (
-                <li>Ao marcar no-show, o sistema gera PIX e envia via WhatsApp ao cliente</li>
-              )}
-              <li>Pagamentos confirmados em tempo real via webhook</li>
-              {paymentProvider === 'abacatepay'  && <li>AbacatePay cobra taxa por transação PIX — sem custo fixo</li>}
-              {paymentProvider === 'mercadopago' && <li>Mercado Pago cobra ~1,49% por transação PIX — sem custo fixo</li>}
-              {paymentProvider === 'stripe'      && <li>Stripe cobra ~2,9% + R$0,30 por transação — PIX requer confirmação</li>}
-            </ul>
+        {/* ── URL de Webhook para configurar no provedor ── */}
+        {paymentProvider && webhookUrls && (
+          <div className="border border-gray-200 rounded-xl p-4 space-y-2">
+            <p className="text-sm font-medium text-gray-700">URL do webhook</p>
+            <p className="text-xs text-gray-400">
+              {paymentProvider === 'stripe'
+                ? 'Configure essa URL em Stripe Dashboard → Developers → Webhooks → Add endpoint.'
+                : paymentProvider === 'mercadopago'
+                ? 'Configure essa URL em mercadopago.com.br → Seu negócio → Webhooks → Notificações.'
+                : 'Configure essa URL em app.abacatepay.com → Configurações → Webhooks.'}
+            </p>
+            <div className="flex items-center gap-2">
+              <input
+                readOnly
+                value={webhookUrls[paymentProvider as keyof typeof webhookUrls]}
+                className="flex-1 border border-gray-200 bg-gray-50 rounded-lg px-3 py-2 text-xs text-gray-600 font-mono focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(webhookUrls[paymentProvider as keyof typeof webhookUrls])
+                  showToast('success', 'URL copiada!')
+                }}
+                className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-600 text-sm font-medium px-3 py-2 rounded-lg transition-colors cursor-pointer whitespace-nowrap"
+              >
+                Copiar
+              </button>
+            </div>
+            {paymentProvider === 'stripe' && (
+              <p className="text-xs text-amber-600">
+                Eventos necessários: <span className="font-mono">payment_intent.succeeded</span> e <span className="font-mono">payment_intent.payment_failed</span>
+              </p>
+            )}
           </div>
         )}
+
+        {/* ── Fluxo de pagamento ── */}
+        {paymentProvider && (<>
+          <Field label="Fluxo de pagamento">
+            <select
+              value={paymentFlow}
+              onChange={e => setPaymentFlow(e.target.value)}
+              className={inputCls}
+            >
+              <option value="disabled">Desabilitado — sem cobrança</option>
+              <option value="deposit">Sinal no agendamento — cliente paga % ao agendar</option>
+              <option value="no_show_fee">Taxa de no-show — cobra se não comparecer</option>
+              <option value="both">Ambos — sinal + taxa de no-show</option>
+            </select>
+          </Field>
+
+          {(paymentFlow === 'deposit' || paymentFlow === 'both') && (
+            <Field label="Percentual do sinal (%)" hint="Ex: 30 = cliente paga 30% do valor do serviço ao agendar.">
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={depositPercent}
+                onChange={e => setDepositPercent(Number(e.target.value))}
+                className={inputCls}
+              />
+            </Field>
+          )}
+
+          {(paymentFlow === 'no_show_fee' || paymentFlow === 'both') && (
+            <Field label="Valor da taxa de no-show (R$)" hint="Valor fixo cobrado quando o cliente não comparecer.">
+              <input
+                type="number"
+                min={0}
+                step={0.01}
+                value={noShowFee}
+                onChange={e => setNoShowFee(Number(e.target.value))}
+                className={inputCls}
+              />
+            </Field>
+          )}
+
+          {paymentFlow !== 'disabled' && (
+            <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
+              <p className="text-sm font-semibold text-amber-800 mb-1">Como funciona</p>
+              <ul className="text-xs text-amber-700 space-y-1 list-disc list-inside">
+                {(paymentFlow === 'deposit' || paymentFlow === 'both') && (
+                  <li>Após o agendamento, cliente recebe QR Code PIX para pagar o sinal</li>
+                )}
+                {(paymentFlow === 'no_show_fee' || paymentFlow === 'both') && (
+                  <li>Ao marcar no-show, o sistema gera PIX e envia via WhatsApp ao cliente</li>
+                )}
+                <li>Pagamentos confirmados em tempo real via webhook</li>
+                {paymentProvider === 'abacatepay'  && <li>AbacatePay cobra taxa por transação PIX — sem custo fixo</li>}
+                {paymentProvider === 'mercadopago' && <li>Mercado Pago cobra ~1,49% por transação PIX — sem custo fixo</li>}
+                {paymentProvider === 'stripe'      && <li>Stripe cobra ~2,9% + R$0,30 por transação — PIX requer confirmação</li>}
+              </ul>
+            </div>
+          )}
+        </>)}
 
         <div className="flex justify-end pt-2">
           <SaveButton saving={savingPayment} />

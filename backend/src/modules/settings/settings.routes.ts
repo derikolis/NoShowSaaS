@@ -35,6 +35,8 @@ const updateSchema = z.object({
   noShowFee:            z.number().min(0).optional().nullable(),
 })
 
+const BACKEND_URL = process.env.BACKEND_URL ?? 'https://noshowsaas.onrender.com'
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function tenantFields(tenant: any) {
   return {
@@ -50,6 +52,11 @@ function tenantFields(tenant: any) {
     mpAccessToken: tenant.mpAccessToken, stripeSecretKey: tenant.stripeSecretKey,
     stripeWebhookSecret: tenant.stripeWebhookSecret, abacatePayApiKey: tenant.abacatePayApiKey,
     paymentFlow: tenant.paymentFlow, depositPercent: tenant.depositPercent, noShowFee: tenant.noShowFee,
+    webhookUrls: {
+      mercadopago: `${BACKEND_URL}/api/payments/webhook/mercadopago/${tenant.id}`,
+      stripe:      `${BACKEND_URL}/api/payments/webhook/stripe/${tenant.id}`,
+      abacatepay:  `${BACKEND_URL}/api/payments/webhook/abacatepay/${tenant.id}`,
+    },
   }
 }
 

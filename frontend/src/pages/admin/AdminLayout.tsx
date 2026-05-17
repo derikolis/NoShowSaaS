@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Building2, LogOut,
-  PanelLeftClose, PanelLeftOpen, ShieldCheck, Activity,
+  PanelLeftClose, PanelLeftOpen, ShieldCheck, Activity, ClipboardList,
 } from 'lucide-react'
 import { useAdminAuth } from '../../hooks/useAdminAuth'
 
@@ -10,6 +10,7 @@ const NAV_LINKS = [
   { to: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/admin/tenants',   label: 'Empresas',  icon: Building2       },
   { to: '/admin/status',    label: 'Status',    icon: Activity        },
+  { to: '/admin/audit',     label: 'Auditoria', icon: ClipboardList   },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

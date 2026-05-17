@@ -16,6 +16,7 @@ import AdminLoginPage from './pages/admin/AdminLoginPage'
 import AdminDashboardPage from './pages/admin/AdminDashboardPage'
 import AdminTenantsPage from './pages/admin/AdminTenantsPage'
 import AdminStatusPage from './pages/admin/AdminStatusPage'
+import AdminAuditPage from './pages/admin/AdminAuditPage'
 import LandingPage from './pages/landing/LandingPage'
 
 export default function App() {
@@ -49,6 +50,7 @@ export default function App() {
       <Route path="/admin/dashboard" element={isAdmin ? <AdminDashboardPage /> : <Navigate to="/admin" />} />
       <Route path="/admin/tenants" element={isAdmin ? <AdminTenantsPage /> : <Navigate to="/admin" />} />
       <Route path="/admin/status"  element={isAdmin ? <AdminStatusPage />  : <Navigate to="/admin" />} />
+      <Route path="/admin/audit"   element={isAdmin ? <AdminAuditPage />   : <Navigate to="/admin" />} />
     </Routes>
   )
 }

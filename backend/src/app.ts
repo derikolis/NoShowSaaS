@@ -32,6 +32,9 @@ app.use(cors({
   credentials: true,
 }))
 
+// Raw body para Stripe webhook (deve vir ANTES do express.json)
+app.use('/api/payments/webhook/stripe', express.raw({ type: 'application/json' }))
+
 app.use(express.json({ limit: '5mb' }))
 app.use(cookieParser())
 

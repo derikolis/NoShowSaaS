@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import prisma from '../../shared/utils/prisma'
 import { JwtPayload } from '../../shared/types/jwt'
+import { sendEmail } from '../../shared/utils/email'
 
 export async function adminLogin(email: string, password: string) {
   if (email !== process.env.ADMIN_EMAIL) throw new Error('Credenciais inválidas')
@@ -98,10 +99,110 @@ export async function updateTenantStatus(id: string, status: string) {
   await prisma.tenant.update({ where: { id }, data: { status } })
 }
 
+export async function getAuditLogs(filters: {
+  tenantId?: string
+  action?: string
+  entity?: string
+  dateFrom?: Date
+  dateTo?: Date
+  page?: number
+  limit?: number
+}) {
+  const { tenantId, action, entity, dateFrom, dateTo, page = 1, limit = 50 } = filters
+
+  const where = {
+    ...(tenantId ? { tenantId } : {}),
+    ...(action   ? { action }   : {}),
+    ...(entity   ? { entity }   : {}),
+    ...((dateFrom || dateTo) ? {
+      createdAt: {
+        ...(dateFrom ? { gte: dateFrom } : {}),
+        ...(dateTo   ? { lte: dateTo }   : {}),
+      },
+    } : {}),
+  }
+
+  const [total, logs] = await Promise.all([
+    prisma.auditLog.count({ where }),
+    prisma.auditLog.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+  ])
+
+  const tenantIds = [...new Set(logs.map(l => l.tenantId))]
+  const userIds   = [...new Set(logs.map(l => l.userId).filter(Boolean) as string[])]
+
+  const [tenants, users] = await Promise.all([
+    prisma.tenant.findMany({ where: { id: { in: tenantIds } }, select: { id: true, name: true } }),
+    userIds.length > 0
+      ? prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } })
+      : Promise.resolve([]),
+  ])
+
+  const tenantMap = new Map(tenants.map(t => [t.id, t.name]))
+  const userMap   = new Map(users.map(u => [u.id, u.name]))
+
+  return {
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+    logs: logs.map(l => ({
+      id:         l.id,
+      tenantId:   l.tenantId,
+      tenantName: tenantMap.get(l.tenantId) ?? '—',
+      userId:     l.userId,
+      userName:   l.userId ? (userMap.get(l.userId) ?? 'Sistema') : 'Sistema',
+      action:     l.action,
+      entity:     l.entity,
+      entityId:   l.entityId,
+      ip:         l.ip,
+      createdAt:  l.createdAt,
+    })),
+  }
+}
+
 export async function updateTenantPlan(id: string, plan: string) {
   const tenant = await prisma.tenant.findUnique({ where: { id } })
   if (!tenant) throw new Error('Empresa não encontrada')
   await prisma.tenant.update({ where: { id }, data: { plan } })
+}
+
+export async function broadcastToOwners(subject: string, message: string) {
+  const owners = await prisma.user.findMany({
+    where: { role: 'owner' },
+    select: { email: true, name: true },
+  })
+
+  const html = `
+    <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px">
+      <p style="color:#1e293b;font-size:15px;line-height:1.6">${message.replace(/\n/g, '<br>')}</p>
+      <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
+      <p style="color:#94a3b8;font-size:12px">Você recebe este e-mail pois é administrador de uma conta no sistema.</p>
+    </div>`
+
+  const results = await Promise.allSettled(
+    owners.map(o => sendEmail(o.email, subject, html))
+  )
+
+  return {
+    total:  owners.length,
+    sent:   results.filter(r => r.status === 'fulfilled').length,
+    failed: results.filter(r => r.status === 'rejected').length,
+  }
+}
+
+export async function resetOwnerPassword(tenantId: string, newPassword: string) {
+  const owner = await prisma.user.findFirst({
+    where: { tenantId, role: 'owner' },
+  })
+  if (!owner) throw new Error('Owner não encontrado')
+
+  const passwordHash = await bcrypt.hash(newPassword, 10)
+  await prisma.user.update({ where: { id: owner.id }, data: { passwordHash } })
 }
 
 export async function deleteTenant(id: string) {
