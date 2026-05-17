@@ -42,7 +42,12 @@ const DAYS = [
   { key: 'sun', label: 'Domingo' },
 ]
 
-const EMPTY_SCHEDULE: WeekSchedule = { mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [] }
+const DEFAULT_SLOT = [{ start: '08:00', end: '18:00' }]
+const EMPTY_SCHEDULE: WeekSchedule = {
+  mon: DEFAULT_SLOT, tue: DEFAULT_SLOT, wed: DEFAULT_SLOT,
+  thu: DEFAULT_SLOT, fri: DEFAULT_SLOT, sat: DEFAULT_SLOT,
+  sun: [],
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
