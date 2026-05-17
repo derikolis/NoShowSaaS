@@ -25,6 +25,12 @@ function setGlobal(state: AdminState) {
 function initAdminAuth() {
   if (initialized) return
   initialized = true
+
+  if (!sessionStorage.getItem(SESSION_KEY)) {
+    setGlobal({ status: 'unauthenticated', user: null })
+    return
+  }
+
   adminApi.get('/admin/auth/me')
     .then(({ data }) => {
       const user = data.data as AdminUser
