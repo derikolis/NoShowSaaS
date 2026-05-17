@@ -1,6 +1,6 @@
 import { useEffect, useState, FormEvent } from 'react'
-import { useParams } from 'react-router-dom'
-import { Clock, CheckCircle2, ChevronLeft, User, CalendarDays, Phone, Mail, Loader2, Copy, Check } from 'lucide-react'
+import { useParams, useSearchParams } from 'react-router-dom'
+import { Clock, CheckCircle2, ChevronLeft, User, CalendarDays, Phone, Mail, Loader2, Copy, Check, KeyRound, MessageCircle } from 'lucide-react'
 import api from '../../services/api'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -160,11 +160,25 @@ function PixScreen({ payment }: { payment: { pixQrCode: string; pixQrCodeBase64:
 
 export default function BookingPage() {
   const { slug } = useParams<{ slug: string }>()
+  const [searchParams] = useSearchParams()
 
   const [loading,   setLoading]   = useState(true)
   const [notFound,  setNotFound]  = useState(false)
   const [data,      setData]      = useState<TenantData | null>(null)
   const [step,      setStep]      = useState<Step>(1)
+
+  // Reset de senha
+  type ResetStep = 'request' | 'choose' | 'code' | 'email-sent' | 'new-password' | 'done'
+  const [resetStep,    setResetStep]    = useState<ResetStep | null>(null)
+  const [resetPhone,   setResetPhone]   = useState('')
+  const [resetMethod,  setResetMethod]  = useState<'whatsapp' | 'email'>('whatsapp')
+  const [resetHint,    setResetHint]    = useState('')
+  const [resetCode,    setResetCode]    = useState('')
+  const [resetToken,   setResetToken]   = useState('')
+  const [resetNewPw,   setResetNewPw]   = useState('')
+  const [resetConfPw,  setResetConfPw]  = useState('')
+  const [resetLoading, setResetLoading] = useState(false)
+  const [resetErr,     setResetErr]     = useState('')
 
   // Selections
   const [service,  setService]  = useState<Service | null>(null)
@@ -195,6 +209,12 @@ export default function BookingPage() {
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false))
   }, [slug])
+
+  // Detecta link de reset por e-mail (?reset=TOKEN)
+  useEffect(() => {
+    const token = searchParams.get('reset')
+    if (token) { setResetToken(token); setResetStep('new-password') }
+  }, [searchParams])
 
   // Load slots when date or pro changes (on step 3)
   useEffect(() => {
@@ -253,6 +273,54 @@ export default function BookingPage() {
     }
   }
 
+  // ── Reset handlers ──────────────────────────────────────────────────────
+
+  async function handleResetRequest(e: FormEvent) {
+    e.preventDefault()
+    setResetErr(''); setResetLoading(true)
+    try {
+      const { data: res } = await api.post(`/booking/${slug}/reset-request`, { phone: resetPhone, method: resetMethod })
+      setResetHint(res.data?.hint ?? '')
+      if (resetMethod === 'whatsapp') setResetStep('code')
+      else setResetStep('email-sent')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      setResetErr(msg ?? 'Erro ao enviar. Tente novamente.')
+    } finally { setResetLoading(false) }
+  }
+
+  async function handleVerifyCode(e: FormEvent) {
+    e.preventDefault()
+    if (resetNewPw !== resetConfPw) { setResetErr('As senhas não coincidem.'); return }
+    setResetErr(''); setResetLoading(true)
+    try {
+      await api.post(`/booking/${slug}/reset-verify`, { phone: resetPhone, code: resetCode, newPassword: resetNewPw })
+      setResetStep('done')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      setResetErr(msg ?? 'Código inválido ou expirado.')
+    } finally { setResetLoading(false) }
+  }
+
+  async function handleNewPassword(e: FormEvent) {
+    e.preventDefault()
+    if (resetNewPw !== resetConfPw) { setResetErr('As senhas não coincidem.'); return }
+    setResetErr(''); setResetLoading(true)
+    try {
+      await api.post(`/booking/${slug}/reset-confirm`, { resetToken, newPassword: resetNewPw })
+      setResetStep('done')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      setResetErr(msg ?? 'Link inválido ou expirado.')
+    } finally { setResetLoading(false) }
+  }
+
+  function exitReset() {
+    setResetStep(null); setResetPhone(''); setResetCode(''); setResetNewPw('')
+    setResetConfPw(''); setResetToken(''); setResetHint(''); setResetErr('')
+    setResetMethod('whatsapp')
+  }
+
   // ── Loading / Not found ──────────────────────────────────────────────────
 
   if (loading) return (
@@ -272,6 +340,178 @@ export default function BookingPage() {
   )
 
   const { tenant, services, professionals } = data
+
+  // ── Reset de senha ───────────────────────────────────────────────────────
+
+  if (resetStep !== null) {
+    const inputCls = 'w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500'
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col">
+        <header className="bg-white border-b border-gray-100 px-4 py-4 text-center">
+          <p className="text-xs font-semibold text-indigo-500 uppercase tracking-widest">Agendamento</p>
+          <h1 className="text-lg font-bold text-gray-900">{tenant.name}</h1>
+        </header>
+        <main className="flex-1 flex items-center justify-center px-4 py-10">
+          <div className="max-w-sm w-full">
+
+            {/* ── Tela: solicitar reset ── */}
+            {(resetStep === 'request' || resetStep === 'choose') && (
+              <div>
+                <div className="w-14 h-14 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <KeyRound size={24} className="text-indigo-600" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-900 text-center mb-1">Esqueci minha senha</h2>
+                <p className="text-sm text-gray-500 text-center mb-6">Informe seu telefone e como quer receber o código</p>
+
+                <form onSubmit={handleResetRequest} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Seu WhatsApp</label>
+                    <input type="tel" value={resetPhone} onChange={e => setResetPhone(e.target.value)}
+                      required minLength={10} placeholder="(11) 99999-0001" autoFocus className={inputCls} />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Como prefere receber?</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button type="button" onClick={() => setResetMethod('whatsapp')}
+                        className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all cursor-pointer ${
+                          resetMethod === 'whatsapp' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:border-gray-300'
+                        }`}>
+                        <MessageCircle size={20} className={resetMethod === 'whatsapp' ? 'text-indigo-600' : 'text-gray-400'} />
+                        <span className={`text-sm font-semibold ${resetMethod === 'whatsapp' ? 'text-indigo-700' : 'text-gray-600'}`}>WhatsApp</span>
+                        <span className="text-[10px] text-gray-400">Código de 6 dígitos</span>
+                      </button>
+                      <button type="button" onClick={() => setResetMethod('email')}
+                        className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all cursor-pointer ${
+                          resetMethod === 'email' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:border-gray-300'
+                        }`}>
+                        <Mail size={20} className={resetMethod === 'email' ? 'text-indigo-600' : 'text-gray-400'} />
+                        <span className={`text-sm font-semibold ${resetMethod === 'email' ? 'text-indigo-700' : 'text-gray-600'}`}>E-mail</span>
+                        <span className="text-[10px] text-gray-400">Link na caixa de entrada</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {resetErr && <p className="text-sm text-red-600 bg-red-50 border border-red-200 px-4 py-3 rounded-xl">{resetErr}</p>}
+
+                  <button type="submit" disabled={resetLoading || resetPhone.replace(/\D/g,'').length < 10}
+                    className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-2">
+                    {resetLoading ? <><Loader2 size={18} className="animate-spin" /> Enviando...</> : 'Enviar'}
+                  </button>
+                  <button type="button" onClick={exitReset} className="w-full text-sm text-gray-400 hover:text-gray-600 cursor-pointer py-2">
+                    Voltar
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {/* ── Tela: código WhatsApp + nova senha ── */}
+            {resetStep === 'code' && (
+              <div>
+                <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <MessageCircle size={24} className="text-green-600" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-900 text-center mb-1">Código enviado!</h2>
+                <p className="text-sm text-gray-500 text-center mb-6">
+                  Enviamos um código para o WhatsApp terminado em <strong>...{resetHint}</strong>. Válido por 10 minutos.
+                </p>
+                <form onSubmit={handleVerifyCode} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Código de 6 dígitos</label>
+                    <input value={resetCode} onChange={e => setResetCode(e.target.value.replace(/\D/g,'').slice(0,6))}
+                      required minLength={6} maxLength={6} placeholder="000000" autoFocus
+                      className={`${inputCls} text-center text-2xl tracking-widest font-bold`} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Nova senha</label>
+                    <input type="password" value={resetNewPw} onChange={e => setResetNewPw(e.target.value)}
+                      required minLength={6} placeholder="Mínimo 6 caracteres" className={inputCls} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Confirmar senha</label>
+                    <input type="password" value={resetConfPw} onChange={e => setResetConfPw(e.target.value)}
+                      required minLength={6} placeholder="Repita a senha" className={inputCls} />
+                  </div>
+                  {resetErr && <p className="text-sm text-red-600 bg-red-50 border border-red-200 px-4 py-3 rounded-xl">{resetErr}</p>}
+                  <button type="submit" disabled={resetLoading || resetCode.length < 6 || !resetNewPw}
+                    className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-2">
+                    {resetLoading ? <><Loader2 size={18} className="animate-spin" /> Verificando...</> : 'Redefinir senha'}
+                  </button>
+                  <button type="button" onClick={() => setResetStep('request')} className="w-full text-sm text-gray-400 hover:text-gray-600 cursor-pointer py-2">
+                    Não recebi — tentar novamente
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {/* ── Tela: e-mail enviado ── */}
+            {resetStep === 'email-sent' && (
+              <div className="text-center">
+                <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Mail size={24} className="text-blue-600" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-900 mb-2">Verifique seu e-mail</h2>
+                <p className="text-sm text-gray-500 mb-2">
+                  Enviamos um link para <strong>{resetHint}</strong>.
+                </p>
+                <p className="text-xs text-gray-400 mb-6">O link expira em 1 hora. Verifique também o spam.</p>
+                <button onClick={() => setResetStep('request')} className="text-sm text-indigo-600 hover:text-indigo-800 cursor-pointer font-medium">
+                  Não recebi — tentar novamente
+                </button>
+                <button onClick={exitReset} className="block w-full mt-3 text-sm text-gray-400 hover:text-gray-600 cursor-pointer">
+                  Voltar ao agendamento
+                </button>
+              </div>
+            )}
+
+            {/* ── Tela: nova senha via link de e-mail ── */}
+            {resetStep === 'new-password' && (
+              <div>
+                <div className="w-14 h-14 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <KeyRound size={24} className="text-indigo-600" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-900 text-center mb-1">Criar nova senha</h2>
+                <p className="text-sm text-gray-500 text-center mb-6">Escolha uma senha com pelo menos 6 caracteres.</p>
+                <form onSubmit={handleNewPassword} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Nova senha</label>
+                    <input type="password" value={resetNewPw} onChange={e => setResetNewPw(e.target.value)}
+                      required minLength={6} placeholder="Mínimo 6 caracteres" autoFocus className={inputCls} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Confirmar senha</label>
+                    <input type="password" value={resetConfPw} onChange={e => setResetConfPw(e.target.value)}
+                      required minLength={6} placeholder="Repita a senha" className={inputCls} />
+                  </div>
+                  {resetErr && <p className="text-sm text-red-600 bg-red-50 border border-red-200 px-4 py-3 rounded-xl">{resetErr}</p>}
+                  <button type="submit" disabled={resetLoading || !resetNewPw || !resetConfPw}
+                    className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-2">
+                    {resetLoading ? <><Loader2 size={18} className="animate-spin" /> Salvando...</> : 'Salvar nova senha'}
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {/* ── Tela: sucesso ── */}
+            {resetStep === 'done' && (
+              <div className="text-center">
+                <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle2 size={28} className="text-green-600" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-900 mb-2">Senha redefinida!</h2>
+                <p className="text-sm text-gray-500 mb-6">Sua senha foi atualizada com sucesso.</p>
+                <button onClick={exitReset}
+                  className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-colors cursor-pointer">
+                  Voltar ao agendamento
+                </button>
+              </div>
+            )}
+
+          </div>
+        </main>
+      </div>
+    )
+  }
 
   // ── Confirmation screen ──────────────────────────────────────────────────
 
@@ -562,20 +802,29 @@ export default function BookingPage() {
 
                 {/* Cliente reconhecido */}
                 {knownClient ? (
-                  <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl">
-                    <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-                      <User size={18} className="text-green-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900">Olá, {knownClient.name}!</p>
-                      <p className="text-xs text-gray-500">Você já é cliente — só confirme abaixo.</p>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl">
+                      <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center shrink-0">
+                        <User size={18} className="text-green-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">Olá, {knownClient.name}!</p>
+                        <p className="text-xs text-gray-500">Você já é cliente — só confirme abaixo.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setPhoneChecked(false); setKnownClient(null); setPhone(''); setName(''); setEmail('') }}
+                        className="ml-auto text-xs text-gray-400 hover:text-gray-600 cursor-pointer"
+                      >
+                        Trocar
+                      </button>
                     </div>
                     <button
                       type="button"
-                      onClick={() => { setPhoneChecked(false); setKnownClient(null); setPhone(''); setName(''); setEmail('') }}
-                      className="ml-auto text-xs text-gray-400 hover:text-gray-600 cursor-pointer"
+                      onClick={() => { setResetPhone(phone); setResetStep('request') }}
+                      className="text-xs text-indigo-500 hover:text-indigo-700 cursor-pointer"
                     >
-                      Trocar
+                      Esqueci minha senha
                     </button>
                   </div>
                 ) : (

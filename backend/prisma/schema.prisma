@@ -148,6 +148,17 @@ model Service {
   tenant Tenant @relation(fields: [tenantId], references: [id])
 }
 
+model PasswordReset {
+  id        String    @id @default(uuid())
+  clientId  String
+  tenantId  String
+  token     String    @unique
+  method    String    // whatsapp | email
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
 model AuditLog {
   id        String   @id @default(uuid())
   tenantId  String

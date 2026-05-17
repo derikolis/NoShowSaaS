@@ -2,10 +2,13 @@ import { Router, Request, Response, NextFunction } from 'express'
 import { z } from 'zod'
 import jwt from 'jsonwebtoken'
 import { hash, compare } from 'bcryptjs'
+import { randomInt } from 'crypto'
 import { Prisma } from '@prisma/client'
 import prisma from '../../shared/utils/prisma'
 import { ok, fail } from '../../shared/types/api'
 import { createPixCharge } from '../payments/payments.service'
+import { sendWhatsApp } from '../notifications/notification.service'
+import { sendEmail } from '../../shared/utils/email'
 
 const router = Router()
 
@@ -220,6 +223,139 @@ router.post('/:slug/login', async (req: Request, res: Response, next: NextFuncti
 
     const token = signClientToken(client!, tenant.id)
     res.json(ok({ token, client: { name: client!.name } }, 'Login realizado'))
+  } catch (err) { next(err) }
+})
+
+// ── Solicitar reset de senha ─────────────────────────────────────────────────
+router.post('/:slug/reset-request', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body = z.object({
+      phone:  z.string().min(10),
+      method: z.enum(['whatsapp', 'email']).default('whatsapp'),
+    }).parse(req.body)
+
+    const tenant = await prisma.tenant.findUnique({
+      where: { slug: req.params.slug as string },
+      select: { id: true, status: true },
+    })
+    if (!tenant || tenant.status !== 'active') {
+      res.status(404).json(fail('Empresa não encontrada')); return
+    }
+
+    const client = await prisma.client.findFirst({ where: { tenantId: tenant.id, phone: body.phone } })
+    // Sempre retorna 200 para não revelar se o número existe
+    if (!client || !(client as unknown as { passwordHash: string | null }).passwordHash) {
+      res.json(ok(null, 'Se o número tiver cadastro, você receberá as instruções.')); return
+    }
+
+    // Invalida tokens anteriores
+    await (prisma as any).passwordReset.updateMany({
+      where: { clientId: client.id, usedAt: null },
+      data: { usedAt: new Date() },
+    })
+
+    if (body.method === 'whatsapp') {
+      const code      = String(randomInt(100000, 999999))
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000) // 10 min
+      await (prisma as any).passwordReset.create({
+        data: { clientId: client.id, tenantId: tenant.id, token: code, method: 'whatsapp', expiresAt },
+      })
+      await sendWhatsApp(client.phone, `*Kired — Redefinição de senha*\n\nSeu código de verificação é: *${code}*\n\nVálido por 10 minutos. Não compartilhe com ninguém.`).catch(() => null)
+      res.json(ok({ method: 'whatsapp', hint: client.phone.slice(-4) }, 'Código enviado por WhatsApp.'))
+
+    } else {
+      if (!client.email) {
+        res.status(400).json(fail('Nenhum e-mail cadastrado nessa conta.')); return
+      }
+      const token     = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000) // 1h
+      await (prisma as any).passwordReset.create({
+        data: { clientId: client.id, tenantId: tenant.id, token, method: 'email', expiresAt },
+      })
+      const frontendUrl = process.env.FRONTEND_URL?.split(',')[0] ?? 'https://kired.com.br'
+      const link = `${frontendUrl}/agendar/${req.params.slug}?reset=${token}`
+      await sendEmail(
+        client.email,
+        'Redefinição de senha — Kired',
+        `<p>Olá, ${client.name}!</p>
+         <p>Clique no link abaixo para redefinir sua senha. O link expira em 1 hora.</p>
+         <p><a href="${link}">${link}</a></p>
+         <p>Se não solicitou, ignore este e-mail.</p>`,
+      ).catch(() => null)
+      const hint = client.email.replace(/(.{2}).*(@.*)/, '$1***$2')
+      res.json(ok({ method: 'email', hint }, 'Link enviado por e-mail.'))
+    }
+  } catch (err) { next(err) }
+})
+
+// ── Verificar código WhatsApp e trocar senha ──────────────────────────────────
+router.post('/:slug/reset-verify', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body = z.object({
+      phone:       z.string().min(10),
+      code:        z.string().min(6).max(6),
+      newPassword: z.string().min(6),
+    }).parse(req.body)
+
+    const tenant = await prisma.tenant.findUnique({
+      where: { slug: req.params.slug as string },
+      select: { id: true, status: true },
+    })
+    if (!tenant || tenant.status !== 'active') {
+      res.status(404).json(fail('Empresa não encontrada')); return
+    }
+
+    const client = await prisma.client.findFirst({ where: { tenantId: tenant.id, phone: body.phone } })
+    if (!client) { res.status(400).json(fail('Código inválido ou expirado.')); return }
+
+    const reset = await (prisma as any).passwordReset.findFirst({
+      where: { clientId: client.id, token: body.code, method: 'whatsapp', usedAt: null },
+    })
+    if (!reset || new Date(reset.expiresAt) < new Date()) {
+      res.status(400).json(fail('Código inválido ou expirado.')); return
+    }
+
+    const passwordHash = await hash(body.newPassword, 10)
+    await prisma.client.update({ where: { id: client.id }, data: { passwordHash } as any })
+    await (prisma as any).passwordReset.update({ where: { id: reset.id }, data: { usedAt: new Date() } })
+
+    const token = signClientToken(client, tenant.id)
+    res.json(ok({ token, client: { name: client.name } }, 'Senha redefinida com sucesso.'))
+  } catch (err) { next(err) }
+})
+
+// ── Confirmar reset via link de e-mail ────────────────────────────────────────
+router.post('/:slug/reset-confirm', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body = z.object({
+      resetToken:  z.string().min(1),
+      newPassword: z.string().min(6),
+    }).parse(req.body)
+
+    const tenant = await prisma.tenant.findUnique({
+      where: { slug: req.params.slug as string },
+      select: { id: true, status: true },
+    })
+    if (!tenant || tenant.status !== 'active') {
+      res.status(404).json(fail('Empresa não encontrada')); return
+    }
+
+    const reset = await (prisma as any).passwordReset.findFirst({
+      where: { tenantId: tenant.id, token: body.resetToken, method: 'email', usedAt: null },
+    })
+    if (!reset || new Date(reset.expiresAt) < new Date()) {
+      res.status(400).json(fail('Link inválido ou expirado.')); return
+    }
+
+    const client = await prisma.client.findUnique({ where: { id: reset.clientId } })
+    if (!client) { res.status(400).json(fail('Cliente não encontrado.')); return }
+
+    const passwordHash = await hash(body.newPassword, 10)
+    await prisma.client.update({ where: { id: client.id }, data: { passwordHash } as any })
+    await (prisma as any).passwordReset.update({ where: { id: reset.id }, data: { usedAt: new Date() } })
+
+    const token = signClientToken(client, tenant.id)
+    res.json(ok({ token, client: { name: client.name } }, 'Senha redefinida com sucesso.'))
   } catch (err) { next(err) }
 })
 
