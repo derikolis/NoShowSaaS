@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import prisma from '../../shared/utils/prisma'
 import { calculateScore, recalculateClientScore, classifyRisk } from '../risk-engine/risk.service'
 import { scheduleReminders, scheduleRiskBasedReminders } from '../notifications/notification.service'
@@ -63,10 +64,18 @@ export async function createAppointment(tenantId: string, data: {
     throw new Error('BLOCKED_HIGH_RISK_PEAK: Cliente com alto risco não pode ser agendado em horário de pico')
   }
 
-  const appointment = await prisma.appointment.create({
-    data: { ...data, tenantId, riskScore: score },
-    include: { client: true },
-  })
+  let appointment
+  try {
+    appointment = await prisma.appointment.create({
+      data: { ...data, tenantId, riskScore: score },
+      include: { client: true },
+    })
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      throw new Error('SLOT_TAKEN: Horário indisponível. Escolha outro horário.')
+    }
+    throw err
+  }
 
   await scheduleRiskBasedReminders(appointment.id, tenantId, appointment.scheduledAt, level)
   audit({ tenantId, userId, action: 'create', entity: 'appointment', entityId: appointment.id })

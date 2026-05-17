@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express'
 import { z } from 'zod'
 import jwt from 'jsonwebtoken'
 import { hash, compare } from 'bcryptjs'
+import { Prisma } from '@prisma/client'
 import prisma from '../../shared/utils/prisma'
 import { ok, fail } from '../../shared/types/api'
 import { createPixCharge } from '../payments/payments.service'
@@ -288,9 +289,17 @@ router.post('/:slug', async (req: Request, res: Response, next: NextFunction) =>
       }
     }
 
-    const appointment = await prisma.appointment.create({
-      data: { tenantId: tenant.id, clientId: client.id, professionalId: body.professionalId, service: service.name, scheduledAt, riskScore: client.riskScore },
-    })
+    let appointment
+    try {
+      appointment = await prisma.appointment.create({
+        data: { tenantId: tenant.id, clientId: client.id, professionalId: body.professionalId, service: service.name, scheduledAt, riskScore: client.riskScore },
+      })
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        res.status(409).json(fail('Horário indisponível. Escolha outro horário.')); return
+      }
+      throw err
+    }
 
     // Cobrança de depósito PIX (se configurado)
     type TenantPay = typeof tenant & {

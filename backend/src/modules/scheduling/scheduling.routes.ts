@@ -53,6 +53,10 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
       res.status(422).json(fail('Cliente com alto risco não pode ser agendado em horário de pico'))
       return
     }
+    if (err instanceof Error && err.message.startsWith('SLOT_TAKEN')) {
+      res.status(409).json(fail('Horário indisponível. Escolha outro horário.'))
+      return
+    }
     next(err)
   }
 })
