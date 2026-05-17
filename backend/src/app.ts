@@ -63,7 +63,9 @@ const webhookLimit = rateLimit({
   legacyHeaders: false,
 })
 
-app.use('/api/auth', authLimit)
+app.use('/api/auth/login', authLimit)
+app.use('/api/auth/register', authLimit)
+app.use('/api/admin/auth/login', authLimit)
 app.use('/api/booking/:slug/login', authLimit)
 app.use('/api/booking/:slug/register', authLimit)
 app.use('/api/payments/webhook', webhookLimit)
