@@ -1,5 +1,5 @@
 import { useEffect, useState, FormEvent } from 'react'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams, Link } from 'react-router-dom'
 import { Clock, CheckCircle2, ChevronLeft, User, CalendarDays, Phone, Mail, Loader2, Copy, Check, KeyRound, MessageCircle } from 'lucide-react'
 import api from '../../services/api'
 
@@ -894,7 +894,10 @@ export default function BookingPage() {
       </main>
 
       {/* Footer */}
-      <footer className="text-center py-6 mt-4">
+      <footer className="text-center py-6 mt-4 space-y-1">
+        <Link to={`/agendar/${slug}/minha-conta`} className="block text-xs text-gray-400 hover:text-indigo-500 transition-colors">
+          Minha conta
+        </Link>
         <p className="text-xs text-gray-300">Powered by Kired</p>
       </footer>
     </div>

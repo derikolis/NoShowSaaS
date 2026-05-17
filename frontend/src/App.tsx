@@ -7,6 +7,7 @@ import ClientsPage from './pages/app/ClientsPage'
 import ProfessionalsPage from './pages/app/ProfessionalsPage'
 import ServicesPage from './pages/app/ServicesPage'
 import BookingPage from './pages/booking/BookingPage'
+import ClientPortalPage from './pages/booking/ClientPortalPage'
 import SettingsPage from './pages/app/SettingsPage'
 import AdminLoginPage from './pages/admin/AdminLoginPage'
 import AdminDashboardPage from './pages/admin/AdminDashboardPage'
@@ -29,6 +30,7 @@ export default function App() {
       <Route path="/services" element={token ? <ServicesPage /> : <Navigate to="/login" />} />
       <Route path="/settings" element={token ? <SettingsPage /> : <Navigate to="/login" />} />
       <Route path="/agendar/:slug" element={<BookingPage />} />
+      <Route path="/agendar/:slug/minha-conta" element={<ClientPortalPage />} />
 
       {/* ── Admin ──────────────────────────────────────────────────────────── */}
       <Route path="/admin" element={<AdminLoginPage />} />

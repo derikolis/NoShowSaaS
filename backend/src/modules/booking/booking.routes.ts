@@ -511,4 +511,89 @@ router.post('/:slug', async (req: Request, res: Response, next: NextFunction) =>
   } catch (err) { next(err) }
 })
 
+// ─── Portal do cliente (autenticado com token de cliente) ─────────────────────
+
+function requireClientAuth(req: Request, res: Response): { clientId: string; tenantId: string } | null {
+  const header = req.headers.authorization
+  if (!header?.startsWith('Bearer ')) { res.status(401).json(fail('Token não fornecido')); return null }
+  try {
+    const payload = jwt.verify(header.slice(7), process.env.JWT_SECRET!) as {
+      type: string; clientId: string; tenantId: string
+    }
+    if (payload.type !== 'client') { res.status(401).json(fail('Token inválido')); return null }
+    return payload
+  } catch {
+    res.status(401).json(fail('Token expirado ou inválido'))
+    return null
+  }
+}
+
+// Lista agendamentos do cliente autenticado
+router.get('/:slug/my/appointments', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenant = await prisma.tenant.findUnique({
+      where: { slug: req.params.slug as string },
+      select: { id: true, status: true },
+    })
+    if (!tenant || tenant.status === 'blocked') { res.status(404).json(fail('Empresa não encontrada')); return }
+
+    const auth = requireClientAuth(req, res)
+    if (!auth || auth.tenantId !== tenant.id) return
+
+    const appointments = await prisma.appointment.findMany({
+      where: { clientId: auth.clientId, tenantId: tenant.id },
+      orderBy: { scheduledAt: 'desc' },
+      select: {
+        id: true, service: true, professionalId: true,
+        scheduledAt: true, status: true, createdAt: true,
+      },
+    })
+
+    // Busca nomes dos profissionais em lote
+    const profIds = [...new Set(appointments.map(a => a.professionalId))]
+    const professionals = await prisma.user.findMany({
+      where: { id: { in: profIds } },
+      select: { id: true, name: true },
+    })
+    const profMap = Object.fromEntries(professionals.map(p => [p.id, p.name]))
+
+    const result = appointments.map(a => ({
+      ...a,
+      professionalName: profMap[a.professionalId] ?? 'Profissional',
+    }))
+
+    res.json(ok(result))
+  } catch (err) { next(err) }
+})
+
+// Cancela agendamento do cliente autenticado
+router.patch('/:slug/my/appointments/:id/cancel', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenant = await prisma.tenant.findUnique({
+      where: { slug: req.params.slug as string },
+      select: { id: true, status: true },
+    })
+    if (!tenant || tenant.status === 'blocked') { res.status(404).json(fail('Empresa não encontrada')); return }
+
+    const auth = requireClientAuth(req, res)
+    if (!auth || auth.tenantId !== tenant.id) return
+
+    const appointment = await prisma.appointment.findFirst({
+      where: { id: String(req.params.id), clientId: auth.clientId, tenantId: tenant.id },
+    })
+    if (!appointment) { res.status(404).json(fail('Agendamento não encontrado')); return }
+    if (appointment.status === 'cancelled') { res.status(400).json(fail('Agendamento já cancelado')); return }
+    if (new Date(appointment.scheduledAt) <= new Date()) {
+      res.status(400).json(fail('Não é possível cancelar agendamentos passados')); return
+    }
+
+    await prisma.appointment.update({
+      where: { id: appointment.id },
+      data: { status: 'cancelled', cancelledAt: new Date() },
+    })
+
+    res.json(ok(null, 'Agendamento cancelado'))
+  } catch (err) { next(err) }
+})
+
 export default router
