@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { authMiddleware, requireRole } from '../../shared/middlewares/auth.middleware'
 import { listAppointments, getAppointment, createAppointment, cancelAppointment, confirmAppointment, markNoShow, rescheduleAppointment } from './scheduling.service'
 import { ok, fail } from '../../shared/types/api'
+import { chargeNoShowFee } from '../payments/payments.service'
 
 const router = Router()
 router.use(authMiddleware)
@@ -99,6 +100,8 @@ router.patch('/:id/reschedule', async (req: Request, res: Response, next: NextFu
 router.patch('/:id/no-show', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const appointment = await markNoShow(req.tenantId, String(req.params.id))
+    // Dispara cobrança de no-show em background (não bloqueia resposta)
+    chargeNoShowFee(appointment.id, req.tenantId).catch(() => null)
     res.json(ok(appointment, 'Marcado como no-show'))
   } catch (err) {
     if (err instanceof Error && err.message === 'Agendamento não encontrado') {

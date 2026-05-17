@@ -1,6 +1,6 @@
 import { useEffect, useState, FormEvent } from 'react'
 import { useParams } from 'react-router-dom'
-import { Clock, CheckCircle2, ChevronLeft, User, CalendarDays, Phone, Mail, Loader2 } from 'lucide-react'
+import { Clock, CheckCircle2, ChevronLeft, User, CalendarDays, Phone, Mail, Loader2, Copy, Check } from 'lucide-react'
 import api from '../../services/api'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -11,6 +11,7 @@ interface TenantData   { tenant: { name: string }; services: Service[]; professi
 interface BookingResult {
   appointment: { id: string; service: string; professional: string; scheduledAt: string; duration: number }
   client: { name: string; phone: string }
+  payment: { pixQrCode: string; pixQrCodeBase64: string | null; amount: number } | null
 }
 
 type Step = 1 | 2 | 3 | 4 | 'done'
@@ -93,6 +94,64 @@ function Card({ children, className = '' }: { children: React.ReactNode; classNa
   return (
     <div className={`bg-white rounded-2xl border border-gray-100 shadow-sm ${className}`}>
       {children}
+    </div>
+  )
+}
+
+// ─── PIX Screen ──────────────────────────────────────────────────────────────
+
+function PixScreen({ payment }: { payment: { pixQrCode: string; pixQrCodeBase64: string | null; amount: number } }) {
+  const [copied, setCopied] = useState(false)
+
+  function handleCopy() {
+    navigator.clipboard.writeText(payment.pixQrCode)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 3000)
+  }
+
+  return (
+    <div className="mb-6">
+      <div className="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+        <CheckCircle2 size={40} className="text-indigo-600" />
+      </div>
+      <h2 className="text-xl font-bold text-gray-900 mb-1">Agendamento criado!</h2>
+      <p className="text-gray-500 text-sm mb-6">
+        Para garantir seu horário, pague o sinal de{' '}
+        <strong className="text-gray-800">
+          {payment.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+        </strong>{' '}
+        via PIX.
+      </p>
+
+      {payment.pixQrCodeBase64 && (
+        <div className="flex justify-center mb-4">
+          <img
+            src={`data:image/png;base64,${payment.pixQrCodeBase64}`}
+            alt="QR Code PIX"
+            className="w-44 h-44 border border-gray-200 rounded-xl"
+          />
+        </div>
+      )}
+
+      <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 mb-3">
+        <p className="text-[11px] text-gray-400 mb-1.5 font-medium uppercase tracking-wide">PIX Copia e Cola</p>
+        <p className="text-xs text-gray-700 font-mono break-all leading-relaxed">{payment.pixQrCode}</p>
+      </div>
+
+      <button
+        onClick={handleCopy}
+        className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-colors cursor-pointer ${
+          copied
+            ? 'bg-green-100 text-green-700 border border-green-200'
+            : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+        }`}
+      >
+        {copied ? <><Check size={15} /> Copiado!</> : <><Copy size={15} /> Copiar código PIX</>}
+      </button>
+
+      <p className="mt-3 text-[11px] text-gray-400">
+        O pagamento é processado pelo Mercado Pago. Após confirmar, você receberá um lembrete.
+      </p>
     </div>
   )
 }
@@ -224,13 +283,21 @@ export default function BookingPage() {
       </header>
       <main className="flex-1 flex items-center justify-center px-4 py-10">
         <div className="max-w-sm w-full text-center">
-          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <CheckCircle2 size={40} className="text-green-600" />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-1">Confirmado!</h2>
-          <p className="text-gray-500 text-sm mb-8">
-            Você receberá uma mensagem de lembrete antes do horário.
-          </p>
+
+          {booking.payment ? (
+            <PixScreen payment={booking.payment} />
+          ) : (
+            <>
+              <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <CheckCircle2 size={40} className="text-green-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-1">Confirmado!</h2>
+              <p className="text-gray-500 text-sm mb-8">
+                Você receberá uma mensagem de lembrete antes do horário.
+              </p>
+            </>
+          )}
+
           <Card className="text-left mb-6">
             <div className="p-5 space-y-3">
               {[

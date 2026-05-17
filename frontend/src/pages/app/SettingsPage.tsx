@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Smartphone, Server, MessageSquare, Clock, Link, QrCode } from 'lucide-react'
+import { Smartphone, Server, MessageSquare, Clock, Link, QrCode, CreditCard } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import Layout from '../../components/Layout'
 import api from '../../services/api'
@@ -20,6 +20,10 @@ type Settings = {
   reminderTemplate: string | null
   confirmationTemplate: string | null
   peakHours: PeakRange[] | null
+  mpAccessToken: string | null
+  paymentFlow: string | null
+  depositPercent: number | null
+  noShowFee: number | null
 }
 
 const DEFAULT_REMINDER     = 'Olá {nome}.\nVocê tem um agendamento amanhã às {hora} com {profissional}.\nDeseja confirmar sua presença?'
@@ -71,7 +75,7 @@ function SaveButton({ saving, label = 'Salvar alterações' }: { saving: boolean
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-type Section = 'booking' | 'whatsapp' | 'api' | 'notifications' | 'hours' | 'advanced'
+type Section = 'booking' | 'whatsapp' | 'api' | 'notifications' | 'hours' | 'payments' | 'advanced'
 
 const NAV: { id: Section; label: string; icon: React.ElementType }[] = [
   { id: 'booking',       label: 'Agendamento',     icon: QrCode        },
@@ -79,6 +83,7 @@ const NAV: { id: Section; label: string; icon: React.ElementType }[] = [
   { id: 'api',           label: 'Integração API',  icon: Server        },
   { id: 'notifications', label: 'Notificações',    icon: MessageSquare },
   { id: 'hours',         label: 'Horários de pico', icon: Clock        },
+  { id: 'payments',      label: 'Pagamentos',      icon: CreditCard    },
   { id: 'advanced',      label: 'Avançado',        icon: Link          },
 ]
 
@@ -112,6 +117,13 @@ export default function SettingsPage() {
   const [newStart,    setNewStart]    = useState(12)
   const [newEnd,      setNewEnd]      = useState(14)
   const [savingPeak,  setSavingPeak]  = useState(false)
+
+  // Payment state
+  const [mpToken,        setMpToken]        = useState('')
+  const [paymentFlow,    setPaymentFlow]    = useState('disabled')
+  const [depositPercent, setDepositPercent] = useState(30)
+  const [noShowFee,      setNoShowFee]      = useState(0)
+  const [savingPayment,  setSavingPayment]  = useState(false)
 
   // Test send
   const [testPhone, setTestPhone] = useState('')
@@ -147,6 +159,10 @@ export default function SettingsPage() {
       setReminderTpl(s.reminderTemplate ?? DEFAULT_REMINDER)
       setConfirmationTpl(s.confirmationTemplate ?? DEFAULT_CONFIRMATION)
       setPeakHours(s.peakHours ?? [{ start: 12, end: 14 }, { start: 18, end: 20 }])
+      setMpToken(s.mpAccessToken ?? '')
+      setPaymentFlow(s.paymentFlow ?? 'disabled')
+      setDepositPercent(s.depositPercent ?? 30)
+      setNoShowFee(s.noShowFee ?? 0)
     })
   }, [fetchStatus])
 
@@ -209,6 +225,20 @@ export default function SettingsPage() {
   function addPeakRange() {
     if (newEnd <= newStart) { showToast('error', 'Hora final deve ser maior que a inicial.'); return }
     setPeakHours(prev => [...prev, { start: newStart, end: newEnd }])
+  }
+
+  async function handleSavePayment(e: React.FormEvent) {
+    e.preventDefault(); setSavingPayment(true)
+    try {
+      await api.put('/settings', {
+        mpAccessToken:  mpToken  || null,
+        paymentFlow:    paymentFlow,
+        depositPercent: paymentFlow === 'deposit' || paymentFlow === 'both' ? depositPercent : null,
+        noShowFee:      paymentFlow === 'no_show_fee' || paymentFlow === 'both' ? noShowFee : null,
+      })
+      showToast('success', 'Configurações de pagamento salvas.')
+    } catch { showToast('error', 'Erro ao salvar.') }
+    finally { setSavingPayment(false) }
   }
 
   async function handleSavePeakHours() {
@@ -576,6 +606,86 @@ export default function SettingsPage() {
           </button>
         </div>
       </div>
+    ),
+
+    payments: (
+      <form onSubmit={handleSavePayment} className="space-y-6">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">Pagamentos</h2>
+          <p className="text-sm text-gray-500 mt-1">
+            Configure cobranças via PIX com Mercado Pago. O cliente paga direto pelo link — sem mensalidade, só por transação.
+          </p>
+        </div>
+
+        <Field label="Access Token do Mercado Pago" hint="Encontre em mercadopago.com.br → Seu negócio → Credenciais → Access Token de produção.">
+          <input
+            type="password"
+            value={mpToken}
+            onChange={e => setMpToken(e.target.value)}
+            placeholder="APP_USR-••••••••••••••••"
+            className={inputCls}
+          />
+        </Field>
+
+        <Field label="Fluxo de pagamento">
+          <select
+            value={paymentFlow}
+            onChange={e => setPaymentFlow(e.target.value)}
+            className={inputCls}
+          >
+            <option value="disabled">Desabilitado — sem cobrança</option>
+            <option value="deposit">Sinal no agendamento — cliente paga % ao agendar</option>
+            <option value="no_show_fee">Taxa de no-show — cobra se não comparecer</option>
+            <option value="both">Ambos — sinal + taxa de no-show</option>
+          </select>
+        </Field>
+
+        {(paymentFlow === 'deposit' || paymentFlow === 'both') && (
+          <Field label="Percentual do sinal (%)" hint="Ex: 30 = cliente paga 30% do valor do serviço ao agendar.">
+            <input
+              type="number"
+              min={1}
+              max={100}
+              value={depositPercent}
+              onChange={e => setDepositPercent(Number(e.target.value))}
+              className={inputCls}
+            />
+          </Field>
+        )}
+
+        {(paymentFlow === 'no_show_fee' || paymentFlow === 'both') && (
+          <Field label="Valor da taxa de no-show (R$)" hint="Valor fixo cobrado quando o cliente não comparece.">
+            <input
+              type="number"
+              min={0}
+              step={0.01}
+              value={noShowFee}
+              onChange={e => setNoShowFee(Number(e.target.value))}
+              className={inputCls}
+            />
+          </Field>
+        )}
+
+        {paymentFlow !== 'disabled' && (
+          <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
+            <p className="text-sm font-semibold text-amber-800 mb-1">Como funciona</p>
+            <ul className="text-xs text-amber-700 space-y-1 list-disc list-inside">
+              {(paymentFlow === 'deposit' || paymentFlow === 'both') && (
+                <li>Após o agendamento, cliente recebe QR Code PIX para pagar o sinal</li>
+              )}
+              {(paymentFlow === 'no_show_fee' || paymentFlow === 'both') && (
+                <li>Ao marcar no-show, o sistema gera PIX e envia via WhatsApp ao cliente</li>
+              )}
+              <li>Pagamentos confirmados pelo Mercado Pago em tempo real via webhook</li>
+              <li>Mercado Pago cobra ~1,49% por transação PIX — sem custo fixo</li>
+            </ul>
+          </div>
+        )}
+
+        <div className="flex justify-end pt-2">
+          <SaveButton saving={savingPayment} />
+        </div>
+      </form>
     ),
 
     advanced: (

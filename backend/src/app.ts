@@ -12,6 +12,7 @@ import servicesRoutes from './modules/services/services.routes'
 import bookingRoutes  from './modules/booking/booking.routes'
 import usersRoutes from './modules/users/users.routes'
 import adminRoutes from './modules/admin/admin.routes'
+import paymentsRoutes from './modules/payments/payments.routes'
 import whatsappWebhook from './webhooks/whatsapp.webhook'
 import { errorMiddleware } from './shared/middlewares/error.middleware'
 
@@ -44,6 +45,7 @@ app.use('/api/services', servicesRoutes)
 app.use('/api/booking',  bookingRoutes)
 app.use('/api/users', usersRoutes)
 app.use('/api/admin', adminRoutes)
+app.use('/api/payments', paymentsRoutes)
 app.use('/webhooks', whatsappWebhook)
 
 app.use(errorMiddleware)

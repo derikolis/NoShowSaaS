@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken'
 import { hash, compare } from 'bcryptjs'
 import prisma from '../../shared/utils/prisma'
 import { ok, fail } from '../../shared/types/api'
+import { createPixCharge } from '../payments/payments.service'
 
 const router = Router()
 
@@ -242,7 +243,7 @@ router.post('/:slug', async (req: Request, res: Response, next: NextFunction) =>
 
     const tenant = await prisma.tenant.findUnique({
       where: { slug: (req.params.slug as string) },
-      select: { id: true, status: true },
+      select: { id: true, status: true, mpAccessToken: true, paymentFlow: true, depositPercent: true },
     })
     if (!tenant || tenant.status !== 'active') {
       res.status(404).json(fail('Empresa não encontrada ou inativa')); return
@@ -289,9 +290,38 @@ router.post('/:slug', async (req: Request, res: Response, next: NextFunction) =>
       data: { tenantId: tenant.id, clientId: client.id, professionalId: body.professionalId, service: service.name, scheduledAt, riskScore: client.riskScore },
     })
 
+    // Cobrança de depósito PIX (se configurado)
+    let paymentData: { pixQrCode: string; pixQrCodeBase64: string | null; amount: number } | null = null
+    const needsDeposit = (tenant.paymentFlow === 'deposit' || tenant.paymentFlow === 'both')
+      && tenant.mpAccessToken
+      && service.price
+      && (tenant.depositPercent ?? 0) > 0
+
+    if (needsDeposit) {
+      try {
+        const amount = Math.round((service.price! * (tenant.depositPercent! / 100)) * 100) / 100
+        const payment = await createPixCharge({
+          tenantId:    tenant.id,
+          appointmentId: appointment.id,
+          type:        'deposit',
+          amount,
+          description: `Sinal — ${service.name}`,
+          payerEmail:  client.email ?? 'cliente@kired.com.br',
+          payerName:   client.name,
+          accessToken: tenant.mpAccessToken!,
+        })
+        paymentData = {
+          pixQrCode:       payment.pixQrCode ?? '',
+          pixQrCodeBase64: payment.pixQrCodeBase64 ?? null,
+          amount,
+        }
+      } catch { /* ignora erro de pagamento — agendamento já foi criado */ }
+    }
+
     res.status(201).json(ok({
       appointment: { id: appointment.id, service: service.name, professional: professional.name, scheduledAt: appointment.scheduledAt, duration: service.duration },
       client: { name: client.name, phone: client.phone },
+      payment: paymentData,
     }, 'Agendamento realizado com sucesso'))
   } catch (err) { next(err) }
 })

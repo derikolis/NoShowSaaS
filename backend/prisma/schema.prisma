@@ -21,12 +21,17 @@ model Tenant {
   reminderTemplate     String?
   confirmationTemplate String?
   peakHours            Json?
+  mpAccessToken        String?
+  paymentFlow          String?   // disabled | deposit | no_show_fee | both
+  depositPercent       Int?
+  noShowFee            Float?
 
   users        User[]
   clients      Client[]
   appointments Appointment[]
   waitlist     Waitlist[]
   services     Service[]
+  payments     Payment[]
 }
 
 model User {
@@ -78,6 +83,24 @@ model Appointment {
   tenant        Tenant         @relation(fields: [tenantId], references: [id])
   client        Client         @relation(fields: [clientId], references: [id])
   notifications Notification[]
+  payments      Payment[]
+}
+
+model Payment {
+  id              String    @id @default(uuid())
+  tenantId        String
+  appointmentId   String
+  mpPaymentId     String?
+  type            String    // deposit | no_show_fee
+  amount          Float
+  status          String    @default("pending") // pending | approved | rejected | cancelled
+  pixQrCode       String?
+  pixQrCodeBase64 String?
+  createdAt       DateTime  @default(now())
+  paidAt          DateTime?
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id])
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
 }
 
 model Waitlist {

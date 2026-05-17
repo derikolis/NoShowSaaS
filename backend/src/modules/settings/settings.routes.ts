@@ -22,36 +22,37 @@ const updateSchema = z.object({
   reminderTemplate:     z.string().min(10, 'Template muito curto').optional().nullable(),
   confirmationTemplate: z.string().min(10, 'Template muito curto').optional().nullable(),
   peakHours:            z.array(peakHourRangeSchema).optional().nullable(),
+  mpAccessToken:        z.string().optional().nullable(),
+  paymentFlow:          z.enum(['disabled', 'deposit', 'no_show_fee', 'both']).optional().nullable(),
+  depositPercent:       z.number().int().min(1).max(100).optional().nullable(),
+  noShowFee:            z.number().min(0).optional().nullable(),
 })
 
 function tenantFields(tenant: {
-  name: string
-  slug: string
-  whatsappPhone: string | null
-  evolutionApiUrl: string | null
-  evolutionApiKey: string | null
-  evolutionInstance: string | null
-  reminderTemplate: string | null
-  confirmationTemplate: string | null
+  name: string; slug: string
+  whatsappPhone: string | null; evolutionApiUrl: string | null
+  evolutionApiKey: string | null; evolutionInstance: string | null
+  reminderTemplate: string | null; confirmationTemplate: string | null
   peakHours: unknown
+  mpAccessToken: string | null; paymentFlow: string | null
+  depositPercent: number | null; noShowFee: number | null
 }) {
   return {
-    name:                 tenant.name,
-    slug:                 tenant.slug,
-    whatsappPhone:        tenant.whatsappPhone,
-    evolutionApiUrl:      tenant.evolutionApiUrl,
-    evolutionApiKey:      tenant.evolutionApiKey,
-    evolutionInstance:    tenant.evolutionInstance,
-    reminderTemplate:     tenant.reminderTemplate,
-    confirmationTemplate: tenant.confirmationTemplate,
-    peakHours:            tenant.peakHours,
+    name: tenant.name, slug: tenant.slug,
+    whatsappPhone: tenant.whatsappPhone, evolutionApiUrl: tenant.evolutionApiUrl,
+    evolutionApiKey: tenant.evolutionApiKey, evolutionInstance: tenant.evolutionInstance,
+    reminderTemplate: tenant.reminderTemplate, confirmationTemplate: tenant.confirmationTemplate,
+    peakHours: tenant.peakHours,
+    mpAccessToken: tenant.mpAccessToken, paymentFlow: tenant.paymentFlow,
+    depositPercent: tenant.depositPercent, noShowFee: tenant.noShowFee,
   }
 }
 
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const tenant = await prisma.tenant.findUniqueOrThrow({ where: { id: req.tenantId } })
-    res.json(ok(tenantFields(tenant)))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    res.json(ok(tenantFields(tenant as any)))
   } catch (err) { next(err) }
 })
 
@@ -63,7 +64,8 @@ router.put('/', requireRole('owner'), async (req: Request, res: Response, next: 
       ...(peakHours !== undefined && { peakHours: peakHours === null ? Prisma.DbNull : peakHours }),
     }
     const tenant = await prisma.tenant.update({ where: { id: req.tenantId }, data })
-    res.json(ok(tenantFields(tenant), 'Configurações salvas'))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    res.json(ok(tenantFields(tenant as any), 'Configurações salvas'))
   } catch (err) { next(err) }
 })
 
