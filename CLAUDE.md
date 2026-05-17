@@ -1,271 +1,653 @@
-# CLAUDE.md — No-Show Protection SaaS
-> Estado atual do projeto em 16/05/2026. Consultar no início de cada sessão.
+```txt
+====================================================
+NO-SHOW PROTECTION SAAS
+PLANEJAMENTO COMPLETO DO SISTEMA
+====================================================
 
----
+IDEIA CENTRAL
+----------------------------------------------------
 
-## STATUS DO MVP
+O sistema existe para reduzir faltas em agendamentos.
 
-**Backend: COMPLETO** — todas as 10 etapas implementadas e funcionando.
-**Frontend: COMPLETO + POLIDO** — todas as páginas construídas e melhoradas.
-**Admin: COMPLETO** — painel super admin em `/admin` com login próprio.
-**Integração WhatsApp: parcial** — Evolution API configurada para dev; webhook recebendo.
+Problema:
+- cliente agenda
+- não aparece
+- empresa perde dinheiro
+- horário fica vazio
 
-O produto está tecnicamente pronto para teste com usuário real.
-O próximo passo é validação, não mais código.
+Objetivo do SaaS:
+- reduzir no-show
+- aumentar ocupação
+- recuperar receita
+- automatizar confirmação
+- preencher horários vagos
 
----
 
-## O QUE JÁ ESTÁ IMPLEMENTADO
+====================================================
+MERCADOS QUE PODEM USAR
+====================================================
 
-### Backend (`/backend/src`)
+- barbearias
+- clínicas odontológicas
+- clínicas médicas
+- psicólogos
+- estúdios de tatuagem
+- estética
+- salões
+- mecânicas
+- consultorias
+- freelancers
+- restaurantes
+- pet shops
 
-| Módulo | Arquivo | Status |
-|---|---|---|
-| Auth (JWT + multi-tenant) | `modules/auth/` | ✅ Completo |
-| Clientes (CRUD + LGPD + histórico) | `modules/clients/` | ✅ Completo |
-| Profissionais | `modules/professionals/` | ✅ Completo |
-| Agendamentos | `modules/scheduling/` | ✅ Completo |
-| Motor de risco (score) | `modules/risk-engine/` | ✅ Completo |
-| Notificações WhatsApp | `modules/notifications/` | ✅ Completo |
-| Lista de espera | `modules/waitlist/` | ✅ Completo |
-| Dashboard (métricas) | `modules/dashboard/` | ✅ Completo |
-| Configurações + QR | `modules/settings/` | ✅ Completo |
-| Webhook WhatsApp | `webhooks/whatsapp.webhook.ts` | ✅ Completo |
-| Jobs BullMQ (lembretes) | `jobs/` | ✅ Completo |
-| Auditoria | `shared/utils/audit.ts` | ✅ Completo |
-| Admin (painel super admin) | `modules/admin/` | ✅ Completo |
-| Métricas por profissional | `modules/users/users.routes.ts` | ✅ GET /users/metrics |
 
-### Frontend (`/frontend/src`)
+====================================================
+FLUXO COMPLETO DO SISTEMA
+====================================================
 
-Estrutura de pastas: `pages/app/` (tenant), `pages/admin/` (super admin), `pages/client/` (reservado para portal do cliente final)
+1. Cliente agenda horário
+2. Sistema salva no banco
+3. Sistema calcula risco usando regras
+4. Sistema envia lembretes
+5. Cliente confirma ou cancela
+6. Se cancelar:
+   - vaga é liberada
+   - lista de espera é acionada
+7. Se não responder:
+   - sistema pode cancelar
+   - exigir sinal
+   - liberar horário
+8. Dashboard mostra métricas
 
-| Página | Arquivo | Status | Destaques |
-|---|---|---|---|
-| Login | `pages/app/LoginPage.tsx` | ✅ | Toggle de senha |
-| Cadastro | `pages/app/RegisterPage.tsx` | ✅ | Força de senha + regras em tempo real |
-| Dashboard | `pages/app/DashboardPage.tsx` | ✅ | Agenda do dia, gráfico no-shows, comparativo semanal |
-| Agendamentos | `pages/app/AppointmentsPage.tsx` | ✅ | Navegação Dia/Semana/Mês, filtro profissional, ações inline |
-| Clientes | `pages/app/ClientsPage.tsx` | ✅ | Cards de resumo, última visita, histórico no drawer |
-| Profissionais | `pages/app/ProfessionalsPage.tsx` | ✅ | Grid de cards com métricas por profissional |
-| Configurações | `pages/app/SettingsPage.tsx` | ✅ | Nav lateral, WhatsApp QR |
-| Admin Login | `pages/admin/AdminLoginPage.tsx` | ✅ | Tema escuro, credenciais via env |
-| Admin Dashboard | `pages/admin/AdminDashboardPage.tsx` | ✅ | KPIs de tenants |
-| Admin Empresas | `pages/admin/AdminTenantsPage.tsx` | ✅ | CRUD de tenants, ativar/bloquear |
 
-### Banco de dados
+====================================================
+MOTOR DE RISCO (SEM IA)
+====================================================
 
-Migrations aplicadas:
-- Schema base (Tenant, User, Client, Appointment, Waitlist, Notification, AuditLog)
-- LGPD: campo `consentedAt` no Client
-- WhatsApp: campos Evolution API por tenant
-- `status` no Tenant (active | inactive | blocked)
+O sistema NÃO utilizará IA inicialmente.
 
----
+Motivos:
+- evitar custo com tokens
+- reduzir complexidade
+- melhorar performance
+- facilitar manutenção
+- validar produto primeiro
 
-## STACK
+O sistema utilizará:
+- regras
+- score
+- automações
+- histórico do cliente
 
-| Camada | Tecnologia | Versão |
-|---|---|---|
-| Backend | Node.js + TypeScript | TS 6, Express 5 |
-| Frontend | React + Vite | React 19, Vite 8 |
-| Banco | PostgreSQL | 16 |
-| ORM | Prisma + adapter pg | 7.8 |
-| Jobs | BullMQ | 5 |
-| Cache | Redis (ioredis) | 7 |
-| Containers | Docker Compose | — |
-| WhatsApp DEV | Evolution API v1.8.2 | self-hosted |
-| WhatsApp PROD | API oficial Meta | ⚠️ pendente |
+Sem OpenAI.
+Sem LLM.
+Sem custo por uso.
 
----
 
-## ARQUITETURA
+====================================================
+EXEMPLO DE SCORE
+====================================================
 
-Monolito modular. Cada módulo em `/backend/src/modules/<nome>/`.
+Cliente faltou 2x:
++40 pontos
 
+Cliente novo:
++15 pontos
+
+Horário crítico:
++20 pontos
+
+Cliente confirmou presença:
+-30 pontos
+
+
+====================================================
+CLASSIFICAÇÃO DE RISCO
+====================================================
+
+0-30:
+baixo risco
+
+31-60:
+médio risco
+
+61-100:
+alto risco
+
+
+====================================================
+AÇÕES BASEADAS NO RISCO
+====================================================
+
+BAIXO RISCO:
+- lembrete simples
+
+MÉDIO RISCO:
+- confirmação obrigatória
+
+ALTO RISCO:
+- exigir PIX
+- confirmação dupla
+- bloquear horário premium
+- cancelar automaticamente
+
+
+====================================================
+VANTAGENS DO SISTEMA SEM IA
+====================================================
+
+- custo praticamente zero
+- mais rápido
+- mais fácil de escalar
+- mais fácil de manter
+- previsível
+- fácil debug
+- excelente para MVP
+
+
+====================================================
+FUTURO DA IA
+====================================================
+
+IA pode ser adicionada futuramente.
+
+Somente após:
+- validação do produto
+- usuários reais
+- faturamento
+- base de dados suficiente
+
+Possíveis melhorias futuras:
+- previsão avançada
+- análise comportamental
+- previsão de receita
+- machine learning próprio
+
+
+====================================================
+MÓDULO DE AGENDAMENTO
+====================================================
+
+FUNÇÕES:
+- criar agendamento
+- cancelar
+- reagendar
+- encaixe
+- múltiplos serviços
+- múltiplos profissionais
+
+DADOS:
+- nome
+- telefone
+- email
+- serviço
+- data
+- hora
+- profissional
+
+REGRAS:
+- duração variável
+- bloqueio de horários
+- pausa almoço
+- feriados
+- limite diário
+- antecedência mínima
+
+
+====================================================
+WHATSAPP
+====================================================
+
+MENSAGEM:
+"Olá Derik.
+Você possui horário amanhã às 14h.
+Deseja confirmar?"
+
+BOTÕES:
+- confirmar
+- cancelar
+- reagendar
+
+AUTOMAÇÕES:
+- lembrete 24h antes
+- lembrete 2h antes
+- cobrança automática
+- aviso de atraso
+
+
+====================================================
+LISTA DE ESPERA AUTOMÁTICA
+====================================================
+
+Cliente cancelou.
+
+Sistema:
+- encontra pessoas interessadas
+- envia notificação
+- primeiro que aceitar recebe vaga
+
+OBJETIVO:
+- evitar horário vazio
+
+
+====================================================
+SISTEMA DE PAGAMENTO
+====================================================
+
+FUNÇÕES:
+- PIX
+- cartão
+- sinal antecipado
+- cobrança automática
+
+REGRAS:
+- compareceu:
+  valor vira crédito
+
+- faltou:
+  estabelecimento retém taxa
+
+
+====================================================
+DASHBOARD ADMINISTRATIVO
+====================================================
+
+MÉTRICAS:
+- taxa de faltas
+- receita perdida
+- receita recuperada
+- horários recuperados
+- ocupação
+- ticket médio
+- taxa de comparecimento
+
+RELATÓRIOS:
+- profissionais
+- serviços
+- horários críticos
+- clientes reincidentes
+
+
+====================================================
+SISTEMA DE REPUTAÇÃO
+====================================================
+
+CLIENTE POSSUI SCORE:
+
+EXEMPLO:
+95/100 = excelente
+40/100 = risco alto
+
+REGRAS:
+- faltas diminuem score
+- comparecimentos aumentam score
+
+CLIENTE RUIM:
+- exige sinal
+- perde prioridade
+- bloqueio temporário
+
+
+====================================================
+AUTOMAÇÕES
+====================================================
+
+EXEMPLOS:
+
+SE cliente faltar 2x
+ENTÃO exigir PIX
+
+SE cliente VIP cancelar
+ENTÃO oferecer encaixe prioritário
+
+SE horário ficar vazio
+ENTÃO chamar lista de espera
+
+SE cliente sumir 30 dias
+ENTÃO enviar campanha
+
+
+====================================================
+RECUPERAÇÃO DE CLIENTES
+====================================================
+
+FUNÇÕES:
+- campanhas automáticas
+- cupons
+- recuperação de clientes ausentes
+- promoções
+
+EXEMPLO:
+"Sentimos sua falta.
+Ganhe 10% no próximo agendamento."
+
+
+====================================================
+ANALYTICS AVANÇADO
+====================================================
+
+RELATÓRIOS:
+- melhor horário
+- pior horário
+- profissional mais lucrativo
+- taxa de ocupação
+- previsão financeira
+- retenção de clientes
+- horários com mais cancelamento
+
+
+====================================================
+GOOGLE CALENDAR
+====================================================
+
+INTEGRAÇÃO:
+- criar eventos automaticamente
+- sincronizar agenda
+- lembrar profissionais
+
+
+====================================================
+MOBILE APP
+====================================================
+
+FUTURAMENTE:
+
+APP CLIENTE:
+- agendar
+- cancelar
+- pagar
+- confirmar presença
+- acompanhar histórico
+
+APP FUNCIONÁRIO:
+- ver agenda
+- confirmar presença
+- visualizar clientes
+- receber notificações
+
+Inicialmente o sistema será focado em:
+- plataforma web
+- responsividade mobile
+- painel administrativo web
+
+Objetivo:
+validar o produto antes de investir em aplicativos nativos.
+
+
+====================================================
+MULTIEMPRESA
+====================================================
+
+CADA EMPRESA POSSUI:
+- agenda própria
+- funcionários próprios
+- clientes próprios
+- métricas próprias
+
+ARQUITETURA:
+Multi-Tenant SaaS
+
+
+====================================================
+PERMISSÕES
+====================================================
+
+DONO:
+- acesso total
+
+RECEPCIONISTA:
+- agenda clientes
+
+FUNCIONÁRIO:
+- vê apenas agenda própria
+
+
+====================================================
+AUDITORIA
+====================================================
+
+SALVAR:
+- quem alterou
+- quem cancelou
+- data
+- horário
+- IP
+- logs
+
+
+====================================================
+LGPD
+====================================================
+
+NECESSÁRIO:
+- consentimento
+- exclusão de dados
+- criptografia
+- política de privacidade
+- segurança
+
+
+====================================================
+INFRAESTRUTURA
+====================================================
+
+BACKEND:
+- ASP.NET Core
+
+FRONTEND:
+- React
+- Next.js
+
+BANCO:
+- PostgreSQL
+
+CACHE:
+- Redis
+
+FILA:
+- RabbitMQ
+
+CONTAINERS:
+- Docker
+
+CLOUD:
+- AWS
+- Azure
+
+
+====================================================
+ARQUITETURA INTERNA
+====================================================
+
+SERVIÇOS:
+- Auth Service
+- Scheduling Service
+- Notification Service
+- Payment Service
+- Analytics Service
+- Risk Engine Service
+
+
+====================================================
+SISTEMA DE FILAS
+====================================================
+
+IMPORTANTE PARA:
+- envio de WhatsApp
+- emails
+- notificações
+- processamento em massa
+
+EXEMPLO:
+RabbitMQ + Workers
+
+
+====================================================
+MONITORAMENTO
+====================================================
+
+NECESSÁRIO:
+- logs
+- métricas
+- alertas
+- uptime
+- retry automático
+
+FERRAMENTAS:
+- Grafana
+- Prometheus
+- Sentry
+
+
+====================================================
+API PÚBLICA
+====================================================
+
+EMPRESAS PODEM INTEGRAR:
+- ERP
+- CRM
+- financeiro
+- marketing
+- automações
+
+
+====================================================
+WHITE LABEL
+====================================================
+
+EMPRESAS GRANDES PODEM:
+- usar logo própria
+- usar domínio próprio
+- usar aplicativo próprio
+
+
+====================================================
+MODELO DE NEGÓCIO
+====================================================
+
+PLANO BÁSICO:
+- agendamento
+- lembrete simples
+
+PLANO PRO:
+- WhatsApp
+- PIX
+- analytics
+- automações
+
+PLANO ENTERPRISE:
+- multiunidade
+- API
+- white-label
+- suporte premium
+
+
+====================================================
+DIFERENCIAL DO SISTEMA
+====================================================
+
+O sistema NÃO vende agenda.
+
+Ele vende:
+- redução de prejuízo
+- recuperação de receita
+- ocupação máxima
+
+
+====================================================
+POSICIONAMENTO
+====================================================
+
+"Nós reduzimos faltas e recuperamos horários vazios."
+
+
+====================================================
+MVP V1
+====================================================
+
+PRIORIDADE:
+- agendamento
+- WhatsApp
+- confirmação
+- cancelamento
+- lembrete automático
+- lista de espera
+- score simples
+- regras automáticas
+
+
+====================================================
+FASE 2
+====================================================
+
+- PIX
+- analytics
+- reputação
+- automações
+
+
+====================================================
+FASE 3
+====================================================
+
+- previsão avançada
+- análise comportamental
+- machine learning próprio
+
+
+====================================================
+FASE 4
+====================================================
+
+- marketplace
+- IA conversacional
+- white-label
+- integrações massivas
+
+
+====================================================
+MAIOR RISCO TÉCNICO
+====================================================
+
+WhatsApp:
+- custo
+- API oficial
+- bloqueios
+- regras Meta
+
+
+====================================================
+MAIOR RISCO DE NEGÓCIO
+====================================================
+
+Mercado cheio de agendas genéricas.
+
+Necessário:
+- nichar
+- focar em ROI
+- provar redução de faltas
+
+
+====================================================
+NICHOS MAIS FORTES
+====================================================
+
+- odontologia
+- estética
+- harmonização
+- barbearias premium
+- tatuagem
+- psicologia
+
+
+====================================================
+OBJETIVO FINAL
+====================================================
+
+Maximizar ocupação.
+Minimizar horários vazios.
+Reduzir perda financeira.
+Automatizar recuperação de receita.
+
+====================================================
 ```
-backend/src/
-  modules/
-    auth/           → register, login
-    admin/          → adminLogin, stats, listTenants, createTenant, updateStatus
-    clients/        → CRUD, LGPD delete, getClientHistory (últimos 5 + stats)
-    professionals/  → CRUD (só owner cria)
-    scheduling/     → create, cancel, confirm, reschedule, no-show
-    risk-engine/    → calculateScore, recalculateClientScore
-    notifications/  → scheduleRiskBasedReminders, sendWhatsApp
-    waitlist/       → addToWaitlist, notifyNextInWaitlist
-    dashboard/      → getDashboardStats (today, weekComparison, noShowsByDay)
-    settings/       → status WA, QR, test, evolutionInstance por tenant
-    users/          → CRUD, GET /metrics (stats por profissional)
-  webhooks/
-    whatsapp.webhook.ts  → recebe eventos Evolution API
-  jobs/
-    queues.ts            → notificationQueue, riskRecalcQueue
-    scheduler.ts         → jobs recorrentes (cron)
-    notification.worker.ts → processa todos os tipos de job
-  shared/
-    middlewares/     → authMiddleware, requireRole, adminMiddleware, errorMiddleware
-    types/           → ApiResponse, JwtPayload, express.d.ts
-    utils/           → prisma.ts (PrismaPg), audit.ts
-```
-
----
-
-## AUTENTICAÇÃO — DOIS SISTEMAS SEPARADOS
-
-| Sistema | Token | Armazenamento | Proteção |
-|---|---|---|---|
-| Tenant (empresa) | `noshow_token` | localStorage | `authMiddleware` |
-| Super Admin | `noshow_admin_token` | localStorage | `adminMiddleware` (role: superadmin) |
-
-- `App.tsx` lê localStorage diretamente (não usa hook) para evitar estado stale entre instâncias
-- Login e logout usam `window.location.href` (reload forçado) para garantir leitura fresca do token
-- Credenciais admin via env vars: `ADMIN_EMAIL` + `ADMIN_PASSWORD_HASH`
-
----
-
-## MOTOR DE RISCO
-
-Sistema de score por regras — sem IA.
-
-| Evento | Pontos |
-|---|---|
-| Cliente novo | +15 |
-| Faltou 1x | +20 |
-| Faltou 2x ou mais | +40 |
-| Horário de pico (12–14h, 18–20h) | +20 |
-| Agendamento última hora (< 2h) | +25 |
-| Confirmou presença | -30 |
-| Cliente VIP | -20 |
-
-| Score | Nível | Ação |
-|---|---|---|
-| 0–30 | Baixo | Lembrete padrão (24h + 2h) |
-| 31–60 | Médio | + confirmação 4h antes |
-| 61–100 | Alto | + confirmação 6h antes + bloqueia horário de pico |
-
----
-
-## JOBS BULLMQ
-
-| Job | Quando | Tipo |
-|---|---|---|
-| `reminder_24h` | 24h antes do agendamento | Delayed |
-| `reminder_2h` | 2h antes | Delayed |
-| `confirmation_4h` | 4h antes (médio risco) | Delayed |
-| `confirmation_6h` | 6h antes (alto risco) | Delayed |
-| `cancel_unconfirmed` | A cada hora | Recorrente |
-| `recalc_all_scores` | Meia-noite diária | Recorrente |
-| `waitlist_notify` | Imediato ao cancelar | Imediato |
-
----
-
-## WEBHOOK WHATSAPP
-
-`POST /webhooks/whatsapp`
-
-Lógica de parsing:
-1. Ignora mensagens de grupo e `fromMe: true`
-2. Extrai texto de: `conversation`, `extendedTextMessage`, `buttonsResponseMessage`, `templateButtonReplyMessage`, `listResponseMessage`
-3. Busca cliente pelo telefone (com ou sem código 55)
-4. Prioridade: lista de espera pendente → agendamento ativo
-5. Reconhece: `sim/1/btn_confirm/confirmar` | `não/2/btn_cancel/cancelar` | `3/btn_reschedule/reagendar`
-
----
-
-## MULTI-TENANT
-
-- `tenantId` em todas as tabelas
-- Tenant resolvido pelo JWT (`payload.tenantId`)
-- Middleware `authMiddleware` injeta `req.tenantId` e `req.user`
-- Configurações WhatsApp por tenant (sobrescrevem env vars)
-- Slug único por empresa (usado no login)
-- Tenant pode ter status `active | inactive | blocked` (bloqueado = login negado)
-
----
-
-## PERMISSÕES
-
-| Role | O que pode |
-|---|---|
-| `superadmin` | Painel /admin — gerencia todos os tenants |
-| `owner` | Tudo dentro do tenant, incluindo deletar cliente (LGPD) |
-| `receptionist` | Criar/editar clientes e agendamentos |
-| `employee` | Ver apenas agenda própria (filtrado por `professionalId`) |
-
----
-
-## PADRÕES DE CÓDIGO
-
-- **Idioma do código:** inglês (variáveis, funções, nomes de arquivo)
-- **Idioma dos comentários:** português
-- **Commits:** português, verbos imperativos ("Adiciona", "Corrige", "Remove")
-- **Resposta da API:** sempre `{ success: boolean, message: string, data: any }`
-- **Validação:** Zod em todas as entradas (routes)
-- **Erros:** capturados no `errorMiddleware`, ZodError retorna 400, outros 500
-- **Prisma:** singleton em `shared/utils/prisma.ts` usando `PrismaPg` (adapter pg pool)
-
----
-
-## COMO RODAR
-
-```bash
-# 1. Containers (postgres + redis + evolution-api)
-docker compose up -d
-
-# 2. Variáveis de ambiente
-cp backend/.env.example backend/.env
-# Editar backend/.env — especialmente ADMIN_EMAIL e ADMIN_PASSWORD_HASH
-
-# 3. Gerar hash da senha admin
-node -e "require('bcryptjs').hash('sua-senha',10).then(console.log)"
-
-# 4. Migration
-cd backend && npm run db:migrate
-
-# 5. Backend (porta 4000)
-npm run dev
-
-# 6. Frontend (porta 3000, proxy /api → :4000)
-cd ../frontend && npm run dev
-
-# 7. Configurar webhook Evolution API (opcional, dev)
-./scripts/setup-whatsapp.ps1
-```
-
----
-
-## PENDÊNCIAS REAIS (o que falta de fato)
-
-### Crítico para produção
-- [ ] **Migrar WhatsApp para API oficial Meta** — Evolution API não é homologada; qualquer cliente real exige isso
-- [ ] **Configurar CORS** — backend sem CORS explícito; em produção vai quebrar se domínios forem diferentes
-- [ ] **Variável `JWT_SECRET`** — o `.env.example` tem valor placeholder; produção precisa de segredo real
-- [ ] **HTTPS + reverse proxy** — Nginx ou similar na frente do Express em produção
-
-### Funcional mas incompleto
-- [ ] **professionalId no waitlist** — `waitlist.service.ts` usa `client.id` como `professionalId` ao criar agendamento via lista de espera (placeholder explícito no código, linha ~80 de `whatsapp.webhook.ts`)
-- [ ] **Reagendar via WhatsApp** — webhook cancela o agendamento mas não oferece horários; cliente precisa ligar ou acessar a plataforma
-- [ ] **Testes automatizados** — cobertura mínima; risco em refatorações
-
----
-
-## O QUE NÃO FAZER AGORA
-
-- Não adicionar IA, ML ou previsão avançada (sem dados reais ainda)
-- Não construir app mobile antes de validar a web com clientes reais
-- Não adicionar PIX/pagamento antes de ter faturamento próprio
-- Não escalar para microserviços (monolito ainda é adequado)
-- Não colocar cliente real em produção usando Evolution API (risco de bloqueio)
-
----
-
-## PRÓXIMO PASSO REAL
-
-O produto está completo e polido. A prioridade agora é:
-
-1. **Validar o produto com 1–3 clientes reais** (mesmo que em desenvolvimento local)
-2. **Definir o nicho prioritário** (odontologia? barbearia? psicologia?) antes de iterar em features
-3. **CORS + produção** — antes de colocar qualquer cliente real em servidor
-
-Só depois de validação partir para Fase 2 (PIX, analytics avançado, reputação).

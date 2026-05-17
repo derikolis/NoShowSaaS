@@ -25,6 +25,8 @@ const updateSchema = z.object({
 })
 
 function tenantFields(tenant: {
+  name: string
+  slug: string
   whatsappPhone: string | null
   evolutionApiUrl: string | null
   evolutionApiKey: string | null
@@ -34,6 +36,8 @@ function tenantFields(tenant: {
   peakHours: unknown
 }) {
   return {
+    name:                 tenant.name,
+    slug:                 tenant.slug,
     whatsappPhone:        tenant.whatsappPhone,
     evolutionApiUrl:      tenant.evolutionApiUrl,
     evolutionApiKey:      tenant.evolutionApiKey,

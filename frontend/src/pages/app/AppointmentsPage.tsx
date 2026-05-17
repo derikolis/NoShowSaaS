@@ -31,14 +31,6 @@ const STATUS_CONFIG: Record<string, { label: string; dot: string; cls: string }>
   no_show:   { label: 'No-show',    dot: 'bg-red-500',   cls: 'bg-red-50 text-red-700 ring-1 ring-red-200'      },
 }
 
-const TABS = [
-  { key: 'all',       label: 'Todos'       },
-  { key: 'scheduled', label: 'Agendados'   },
-  { key: 'confirmed', label: 'Confirmados' },
-  { key: 'no_show',   label: 'No-show'     },
-  { key: 'cancelled', label: 'Cancelados'  },
-]
-
 type Period = 'day' | 'week' | 'month'
 
 function isoDate(d: Date) { return d.toISOString().slice(0, 10) }
@@ -56,7 +48,6 @@ function getPeriodRange(period: Period, anchor: Date): { from: string; to: strin
     const label = `${mon.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} – ${sun.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}`
     return { from: isoDate(mon), to: isoDate(sun), label }
   }
-  // month
   const start = new Date(d.getFullYear(), d.getMonth(), 1)
   const end   = new Date(d.getFullYear(), d.getMonth() + 1, 0)
   const label = d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
@@ -106,6 +97,69 @@ function Toast({ message }: { message: string }) {
     <div className="fixed bottom-6 right-6 z-50 bg-gray-900 text-white text-sm px-4 py-3 rounded-xl shadow-2xl">
       {message}
     </div>
+  )
+}
+
+// ─── Stat Card ────────────────────────────────────────────────────────────────
+
+function StatCard({ label, value, dot, loading }: { label: string; value: number; dot: string; loading: boolean }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-5 py-4">
+      <div className="flex items-center gap-2 mb-2">
+        <span className={`w-2 h-2 rounded-full ${dot}`} />
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{label}</p>
+      </div>
+      {loading
+        ? <div className="h-7 w-10 bg-gray-100 rounded animate-pulse" />
+        : <p className="text-2xl font-bold text-gray-900">{value}</p>
+      }
+    </div>
+  )
+}
+
+// ─── Confirm Dialog ───────────────────────────────────────────────────────────
+
+function ConfirmDialog({ title, message, confirmLabel, onConfirm, onCancel }: {
+  title: string; message: string; confirmLabel: string
+  onConfirm: () => void; onCancel: () => void
+}) {
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/25 z-50" onClick={onCancel} />
+      <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+          <h3 className="text-base font-semibold text-gray-900 mb-1">{title}</h3>
+          <p className="text-sm text-gray-500 mb-6">{message}</p>
+          <div className="flex justify-end gap-3">
+            <button onClick={onCancel} className="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors">
+              Voltar
+            </button>
+            <button onClick={onConfirm} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg transition-colors">
+              {confirmLabel}
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
+// ─── Skeleton Row ─────────────────────────────────────────────────────────────
+
+function SkeletonRow() {
+  return (
+    <tr className="border-b border-gray-50">
+      <td className="px-5 py-4">
+        <div className="h-4 bg-gray-100 rounded animate-pulse w-32" />
+        <div className="h-3 bg-gray-100 rounded animate-pulse w-20 mt-1.5" />
+      </td>
+      <td className="px-5 py-4"><div className="h-4 bg-gray-100 rounded animate-pulse w-24" /></td>
+      <td className="px-5 py-4"><div className="h-4 bg-gray-100 rounded animate-pulse w-20" /></td>
+      <td className="px-5 py-4"><div className="h-4 bg-gray-100 rounded animate-pulse w-28" /></td>
+      <td className="px-5 py-4"><div className="h-5 bg-gray-100 rounded-full animate-pulse w-20" /></td>
+      <td className="px-5 py-4"><div className="h-1.5 bg-gray-100 rounded-full animate-pulse w-full" /></td>
+      <td className="px-5 py-4" />
+    </tr>
   )
 }
 
@@ -174,7 +228,6 @@ function AppointmentDrawer({
       <div className="fixed inset-0 bg-black/25 z-40" onClick={onClose} />
       <div className="fixed inset-y-0 right-0 w-[420px] bg-white z-50 shadow-2xl flex flex-col">
 
-        {/* Header */}
         <div className="flex items-start justify-between px-6 py-5 border-b border-gray-100">
           <div>
             <h2 className="text-base font-semibold text-gray-900">{appointment.client.name}</h2>
@@ -187,7 +240,6 @@ function AppointmentDrawer({
 
         <div className="flex-1 overflow-y-auto">
 
-          {/* Info */}
           <div className="px-6 py-5 space-y-3 border-b border-gray-100">
             {[
               { icon: Calendar,  text: `${dateStr} às ${timeStr}`.replace(/^\w/, c => c.toUpperCase()) },
@@ -202,7 +254,6 @@ function AppointmentDrawer({
             ))}
           </div>
 
-          {/* Status + Risk */}
           <div className="px-6 py-5 space-y-4 border-b border-gray-100">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Status</span>
@@ -222,7 +273,6 @@ function AppointmentDrawer({
             </div>
           </div>
 
-          {/* Ações */}
           <div className="px-6 py-5 space-y-2">
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Ações</p>
 
@@ -400,6 +450,9 @@ function NewAppointmentModal({ clients, professionals, onClose, onCreated, showT
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+type StatusCounts = { scheduled: number; confirmed: number; no_show: number; cancelled: number }
+type ConfirmState = { id: string; action: 'cancel' | 'no-show'; clientName: string } | null
+
 export default function AppointmentsPage() {
   const [appointments,  setAppointments]  = useState<Appointment[]>([])
   const [total,         setTotal]         = useState(0)
@@ -416,12 +469,17 @@ export default function AppointmentsPage() {
   const [anchor,        setAnchor]        = useState(new Date())
   const [inlineLoading, setInlineLoading] = useState<string | null>(null)
   const [toast,         setToast]         = useState('')
+  const [loading,       setLoading]       = useState(false)
+  const [countsLoading, setCountsLoading] = useState(false)
+  const [statusCounts,  setStatusCounts]  = useState<StatusCounts>({ scheduled: 0, confirmed: 0, no_show: 0, cancelled: 0 })
+  const [confirm,       setConfirm]       = useState<ConfirmState>(null)
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 3000) }
 
   const { from, to, label } = getPeriodRange(period, anchor)
 
   const load = useCallback((p = 1) => {
+    setLoading(true)
     const params: Record<string, string | number> = { page: p, limit: 20 }
     if (filterStatus !== 'all') params.status = filterStatus
     params.dateFrom = new Date(from).toISOString()
@@ -430,7 +488,7 @@ export default function AppointmentsPage() {
       setAppointments(data.data.appointments)
       setTotal(data.data.total)
       setTotalPages(data.data.totalPages)
-    })
+    }).finally(() => setLoading(false))
   }, [filterStatus, from, to])
 
   useEffect(() => { setPage(1); load(1) }, [load])
@@ -439,6 +497,29 @@ export default function AppointmentsPage() {
     api.get('/clients').then(({ data }) => setClients(data.data))
     api.get('/professionals').then(({ data }) => setProfessionals(data.data))
   }, [])
+
+  // Busca contagens por status para os cards e tabs
+  useEffect(() => {
+    setCountsLoading(true)
+    const base = {
+      dateFrom: new Date(from).toISOString(),
+      dateTo:   new Date(to + 'T23:59:59').toISOString(),
+      limit: 1,
+    }
+    Promise.all([
+      api.get('/appointments', { params: { ...base, status: 'scheduled' } }),
+      api.get('/appointments', { params: { ...base, status: 'confirmed' } }),
+      api.get('/appointments', { params: { ...base, status: 'no_show'   } }),
+      api.get('/appointments', { params: { ...base, status: 'cancelled' } }),
+    ]).then(([s, c, ns, ca]) => {
+      setStatusCounts({
+        scheduled: s.data.data.total,
+        confirmed: c.data.data.total,
+        no_show:   ns.data.data.total,
+        cancelled: ca.data.data.total,
+      })
+    }).finally(() => setCountsLoading(false))
+  }, [from, to])
 
   const proMap = new Map(professionals.map(p => [p.id, p.name]))
 
@@ -450,26 +531,68 @@ export default function AppointmentsPage() {
     return matchSearch && matchPro
   })
 
-  async function handleInlineAction(e: React.MouseEvent, id: string, action: 'confirm' | 'cancel' | 'no-show') {
+  function requestInlineAction(e: React.MouseEvent, id: string, action: 'cancel' | 'no-show', clientName: string) {
     e.stopPropagation()
+    setConfirm({ id, action, clientName })
+  }
+
+  async function handleInlineConfirm(e: React.MouseEvent, id: string) {
+    e.stopPropagation()
+    setInlineLoading(`${id}-confirm`)
+    try {
+      await api.patch(`/appointments/${id}/confirm`)
+      showToast('Confirmado')
+      load(page)
+    } catch { showToast('Erro ao confirmar') }
+    finally { setInlineLoading(null) }
+  }
+
+  async function executeConfirmedAction() {
+    if (!confirm) return
+    const { id, action } = confirm
+    setConfirm(null)
     setInlineLoading(`${id}-${action}`)
     try {
       await api.patch(`/appointments/${id}/${action}`)
-      const labels: Record<string, string> = { confirm: 'Confirmado', cancel: 'Cancelado', 'no-show': 'No-show registrado' }
+      const labels: Record<string, string> = { cancel: 'Cancelado', 'no-show': 'No-show registrado' }
       showToast(labels[action])
       load(page)
     } catch { showToast('Erro ao atualizar') }
     finally { setInlineLoading(null) }
   }
 
-  function goToday()  { setAnchor(new Date()) }
-  function goPrev()   { setAnchor(shiftAnchor(period, anchor, -1)) }
-  function goNext()   { setAnchor(shiftAnchor(period, anchor, 1)) }
+  function goToday() { setAnchor(new Date()) }
+  function goPrev()  { setAnchor(shiftAnchor(period, anchor, -1)) }
+  function goNext()  { setAnchor(shiftAnchor(period, anchor, 1)) }
+
+  const totalAll = statusCounts.scheduled + statusCounts.confirmed + statusCounts.no_show + statusCounts.cancelled
+
+  const TABS = [
+    { key: 'all',       label: 'Todos',       count: totalAll                  },
+    { key: 'scheduled', label: 'Agendados',   count: statusCounts.scheduled    },
+    { key: 'confirmed', label: 'Confirmados', count: statusCounts.confirmed    },
+    { key: 'no_show',   label: 'No-show',     count: statusCounts.no_show      },
+    { key: 'cancelled', label: 'Cancelados',  count: statusCounts.cancelled    },
+  ]
 
   return (
     <Layout>
       <div className="p-8">
         {toast && <Toast message={toast} />}
+
+        {confirm && (
+          <ConfirmDialog
+            title={confirm.action === 'cancel' ? 'Cancelar agendamento' : 'Registrar no-show'}
+            message={
+              confirm.action === 'cancel'
+                ? `Tem certeza que deseja cancelar o agendamento de ${confirm.clientName}?`
+                : `Tem certeza que deseja marcar ${confirm.clientName} como no-show?`
+            }
+            confirmLabel={confirm.action === 'cancel' ? 'Cancelar agendamento' : 'Registrar no-show'}
+            onConfirm={executeConfirmedAction}
+            onCancel={() => setConfirm(null)}
+          />
+        )}
 
         {/* ── Header ──────────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between mb-6">
@@ -502,12 +625,19 @@ export default function AppointmentsPage() {
           </div>
         </div>
 
+        {/* ── Stat Cards ──────────────────────────────────────────────────── */}
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          <StatCard label="Agendados"   value={statusCounts.scheduled} dot="bg-blue-500"  loading={countsLoading} />
+          <StatCard label="Confirmados" value={statusCounts.confirmed} dot="bg-green-500" loading={countsLoading} />
+          <StatCard label="No-shows"    value={statusCounts.no_show}   dot="bg-red-500"   loading={countsLoading} />
+          <StatCard label="Cancelados"  value={statusCounts.cancelled} dot="bg-gray-400"  loading={countsLoading} />
+        </div>
+
         <div className="bg-white rounded-xl shadow-sm border border-gray-100">
 
           {/* ── Toolbar ─────────────────────────────────────────────────────── */}
           <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-b border-gray-100">
 
-            {/* Navegação de período */}
             <div className="flex items-center gap-2">
               <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden">
                 {(['day', 'week', 'month'] as Period[]).map(p => (
@@ -536,7 +666,6 @@ export default function AppointmentsPage() {
               <span className="text-sm font-medium text-gray-700 capitalize">{label}</span>
             </div>
 
-            {/* Filtro por profissional */}
             {professionals.length > 0 && (
               <div className="flex items-center gap-2">
                 <User size={14} className="text-gray-400" />
@@ -553,15 +682,22 @@ export default function AppointmentsPage() {
 
           {/* ── Tabs ──────────────────────────────────────────────────────────── */}
           <div className="flex px-5 border-b border-gray-100">
-            {TABS.map(({ key, label: tLabel }) => (
+            {TABS.map(({ key, label: tLabel, count }) => (
               <button
                 key={key}
                 onClick={() => setFilterStatus(key)}
-                className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 ${
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 ${
                   filterStatus === key ? 'text-indigo-600 border-indigo-600' : 'text-gray-500 border-transparent hover:text-gray-700'
                 }`}
               >
                 {tLabel}
+                {!countsLoading && count > 0 && (
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold tabular-nums ${
+                    filterStatus === key ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {count}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -580,7 +716,9 @@ export default function AppointmentsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filtered.length === 0 && (
+              {loading && Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)}
+
+              {!loading && filtered.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-5 py-16 text-center">
                     <div className="flex flex-col items-center gap-3">
@@ -599,7 +737,8 @@ export default function AppointmentsPage() {
                   </td>
                 </tr>
               )}
-              {filtered.map(a => {
+
+              {!loading && filtered.map(a => {
                 const loadingConfirm = inlineLoading === `${a.id}-confirm`
                 const loadingCancel  = inlineLoading === `${a.id}-cancel`
                 const loadingNoShow  = inlineLoading === `${a.id}-no-show`
@@ -636,13 +775,12 @@ export default function AppointmentsPage() {
                     <td className="px-5 py-3.5"><StatusBadge status={a.status} /></td>
                     <td className="px-5 py-3.5 w-32"><RiskBar score={a.riskScore} /></td>
 
-                    {/* Ações inline */}
                     <td className="px-5 py-3.5" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         {a.status === 'scheduled' && (
                           <>
                             <button
-                              onClick={e => handleInlineAction(e, a.id, 'confirm')}
+                              onClick={e => handleInlineConfirm(e, a.id)}
                               disabled={anyLoading}
                               title="Confirmar presença"
                               className="w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors disabled:opacity-40"
@@ -650,7 +788,7 @@ export default function AppointmentsPage() {
                               {loadingConfirm ? <span className="text-[10px]">…</span> : <CheckCircle2 size={15} />}
                             </button>
                             <button
-                              onClick={e => handleInlineAction(e, a.id, 'cancel')}
+                              onClick={e => requestInlineAction(e, a.id, 'cancel', a.client.name)}
                               disabled={anyLoading}
                               title="Cancelar agendamento"
                               className="w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40"
@@ -661,7 +799,7 @@ export default function AppointmentsPage() {
                         )}
                         {a.status === 'confirmed' && (
                           <button
-                            onClick={e => handleInlineAction(e, a.id, 'no-show')}
+                            onClick={e => requestInlineAction(e, a.id, 'no-show', a.client.name)}
                             disabled={anyLoading}
                             title="Marcar no-show"
                             className="w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:text-orange-500 hover:bg-orange-50 transition-colors disabled:opacity-40"

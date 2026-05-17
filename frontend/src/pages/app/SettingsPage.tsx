@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Smartphone, Server, MessageSquare, Clock, Link } from 'lucide-react'
+import { Smartphone, Server, MessageSquare, Clock, Link, QrCode } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
 import Layout from '../../components/Layout'
 import api from '../../services/api'
 
@@ -10,6 +11,8 @@ type QrData   = { base64: string | null; code: string | null }
 type PeakRange = { start: number; end: number }
 
 type Settings = {
+  name: string
+  slug: string
   whatsappPhone: string | null
   evolutionApiUrl: string | null
   evolutionApiKey: string | null
@@ -68,10 +71,11 @@ function SaveButton({ saving, label = 'Salvar alterações' }: { saving: boolean
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-type Section = 'whatsapp' | 'api' | 'notifications' | 'hours' | 'advanced'
+type Section = 'booking' | 'whatsapp' | 'api' | 'notifications' | 'hours' | 'advanced'
 
 const NAV: { id: Section; label: string; icon: React.ElementType }[] = [
-  { id: 'whatsapp',      label: 'WhatsApp',       icon: Smartphone    },
+  { id: 'booking',       label: 'Agendamento',     icon: QrCode        },
+  { id: 'whatsapp',      label: 'WhatsApp',        icon: Smartphone    },
   { id: 'api',           label: 'Integração API',  icon: Server        },
   { id: 'notifications', label: 'Notificações',    icon: MessageSquare },
   { id: 'hours',         label: 'Horários de pico', icon: Clock        },
@@ -79,7 +83,7 @@ const NAV: { id: Section; label: string; icon: React.ElementType }[] = [
 ]
 
 export default function SettingsPage() {
-  const [active, setActive] = useState<Section>('whatsapp')
+  const [active, setActive] = useState<Section>('booking')
 
   // WhatsApp state
   const [waStatus,      setWaStatus]      = useState<WaStatus | null>(null)
@@ -99,6 +103,9 @@ export default function SettingsPage() {
   const [reminderTpl,      setReminderTpl]      = useState(DEFAULT_REMINDER)
   const [confirmationTpl,  setConfirmationTpl]  = useState(DEFAULT_CONFIRMATION)
   const [savingTpl,        setSavingTpl]        = useState(false)
+
+  // Booking link state
+  const [tenantSlug, setTenantSlug] = useState('')
 
   // Peak hours state
   const [peakHours,   setPeakHours]   = useState<PeakRange[]>([])
@@ -132,6 +139,7 @@ export default function SettingsPage() {
     fetchStatus()
     api.get('/settings').then(({ data }) => {
       const s: Settings = data.data
+      setTenantSlug(s.slug ?? '')
       setApiUrl(s.evolutionApiUrl ?? '')
       setApiKey(s.evolutionApiKey ?? '')
       setInstanceName(s.evolutionInstance ?? '')
@@ -229,9 +237,76 @@ export default function SettingsPage() {
 
   // ── Section content ──────────────────────────────────────────────────────────
 
-  const webhookUrl = `${window.location.origin}/api/webhooks/whatsapp`
+  const webhookUrl  = `${window.location.origin}/api/webhooks/whatsapp`
+  const bookingUrl  = tenantSlug ? `${window.location.origin}/agendar/${tenantSlug}` : ''
 
   const sections: Record<Section, React.ReactNode> = {
+
+    booking: (
+      <div className="space-y-8">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">Agendamento online</h2>
+          <p className="text-sm text-gray-500 mt-1">
+            Compartilhe este link com seus clientes para que eles agendem sozinhos, sem precisar ligar.
+          </p>
+        </div>
+
+        {tenantSlug ? (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Link de agendamento</label>
+              <div className="flex items-center gap-2">
+                <input
+                  readOnly
+                  value={bookingUrl}
+                  className="flex-1 border border-gray-200 bg-gray-50 rounded-lg px-3 py-2.5 text-sm text-gray-700 font-mono focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => { navigator.clipboard.writeText(bookingUrl); showToast('success', 'Link copiado!') }}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+                >
+                  Copiar link
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-gray-400">
+                O cliente escolhe o serviço, profissional e horário — sem precisar entrar em contato.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">QR Code</label>
+              <div className="inline-flex flex-col items-center gap-4 p-5 border border-gray-200 rounded-xl bg-white">
+                <QRCodeSVG
+                  value={bookingUrl}
+                  size={180}
+                  level="M"
+                  includeMargin={false}
+                />
+                <p className="text-xs text-gray-400 text-center max-w-48">
+                  Imprima ou mostre aos clientes na recepção para eles agendarem pelo celular.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
+              <p className="text-sm font-semibold text-indigo-800 mb-1">Como funciona</p>
+              <ol className="text-xs text-indigo-700 space-y-1 list-decimal list-inside">
+                <li>Cliente acessa o link ou escaneia o QR</li>
+                <li>Escolhe o serviço, profissional e horário</li>
+                <li>Informa nome e WhatsApp</li>
+                <li>Agendamento é criado automaticamente no sistema</li>
+                <li>Cliente recebe lembretes via WhatsApp</li>
+              </ol>
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center justify-center py-12 text-sm text-gray-400">
+            Carregando...
+          </div>
+        )}
+      </div>
+    ),
 
     whatsapp: (
       <div className="space-y-6">
